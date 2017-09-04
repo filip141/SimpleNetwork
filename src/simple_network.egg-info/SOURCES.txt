@@ -1,0 +1,12 @@
+src/simple_network/__init__.py
+src/simple_network.egg-info/PKG-INFO
+src/simple_network.egg-info/SOURCES.txt
+src/simple_network.egg-info/dependency_links.txt
+src/simple_network.egg-info/top_level.txt
+src/simple_network/layers/__init__.py
+src/simple_network/layers/convo_layers.py
+src/simple_network/layers/fc_layers.py
+src/simple_network/tools/__init__.py
+src/simple_network/tools/utils.py
+src/simple_network/train/__init__.py
+src/simple_network/train/losses.py
