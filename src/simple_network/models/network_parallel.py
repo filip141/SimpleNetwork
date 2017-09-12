@@ -1,21 +1,74 @@
 import time
+import copy
 import logging
 import tensorflow as tf
+from simple_network.layers.layers import Layer
 from simple_network.models.netmodel import SNModel
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class NetworkModel(SNModel):
+class NetworkNode(object):
+
+    def __init__(self, name="node_layer", reduce_output=None):
+        if reduce_output is None:
+            reduce_output = ""
+        self.layer_size = None
+        self.node_layers = []
+        self.layer_name = name
+        self.reduce_output = reduce_output
+
+    def add(self, layer):
+        self.node_layers.append(layer)
+
+    def nodes_num(self):
+        return len(self.node_layers)
+
+    def get_output_info(self):
+        return self.reduce_output.lower()
+
+    def add_many(self, layer, ntimes=1):
+        f_layer = copy.deepcopy(layer)
+        f_layer.reuse = False
+        self.add(f_layer)
+        for _ in range(1, ntimes):
+            n_layer = copy.deepcopy(layer)
+            n_layer.reuse = True
+            self.add(n_layer)
+
+
+class NetworkParallel(SNModel):
 
     def __init__(self, input_size, summary_path=None, metric=None, input_summary=None):
         # If summary_path is None set tempdir
-        super(NetworkModel, self).__init__(input_size, summary_path, metric, input_summary)
+        super(NetworkParallel, self).__init__(input_size, summary_path, metric, input_summary)
+
+    def build_node(self, node, layer_input, layer_idx):
+        n_layers = node.nodes_num()
+        outputs_list = []
+        reduce_output = node.get_output_info()
+        with tf.name_scope(node.layer_name):
+            if not isinstance(layer_input, list):
+                layer_input = [layer_input for _ in range(0, n_layers)]
+            for l_in, l_ll, l_idx in zip(layer_input, node.node_layers, range(n_layers)):
+                # Build layer
+                l_out = self.build_layer(l_ll, l_in, "{}_{}".format(layer_idx, l_idx), enable_log=False)
+                # Save layer size as node size and add output to list
+                node.layer_size = l_ll.layer_size
+                outputs_list.append(l_out)
+                logger.info("Node {} | {} layer| Input shape: {}, Output shape: {}"
+                            .format(node.layer_name, l_ll.layer_type, l_ll.input_shape, l_ll.output_shape))
+            if reduce_output == 'mean':
+                output_val = tf.reduce_mean(tf.stack(outputs_list), axis=0)
+            else:
+                output_val = outputs_list
+        return output_val
 
     def build_model(self, learning_rate):
         # Define input
         logger.info("-" * 90)
+
         with tf.name_scope("input_layer"):
             self.prepare_input()
         logger.info("Input layer| shape: {}".format(self.input_size))
@@ -24,7 +77,12 @@ class NetworkModel(SNModel):
         layer_input = self.input_layer_placeholder
         self.is_training_placeholder = tf.placeholder(tf.bool, name='is_training')
         for l_idx, layer in enumerate(self.layers):
-            layer_output = self.build_layer(layer, layer_input, l_idx)
+            if isinstance(layer, Layer):
+                layer_output = self.build_layer(layer, layer_input, l_idx)
+            elif isinstance(layer, NetworkNode):
+                layer_output = self.build_node(layer, layer_input, l_idx)
+            else:
+                raise AttributeError("Object not defined {}".format(type(layer)))
             layer_input = layer_output
         # Output placeholder
         self.output_labels_placeholder = tf.placeholder(tf.float32, [None, self.layers[-1].layer_size[-1]],
@@ -32,6 +90,9 @@ class NetworkModel(SNModel):
         y_labels = self.output_labels_placeholder
 
         # Define loss and optimizer
+        init = tf.global_variables_initializer()
+        self.sess.run(init)
+
         self.loss_func = self.get_loss_by_name()(logits=layer_output, labels=y_labels, loss_data=self.loss_data)
         logger.info("Loss function: {}".format(self.loss))
         self.optimizer_func = self.get_optimizer_by_name()(self.loss_func, learning_rate, self.optimizer_data)
@@ -51,7 +112,7 @@ class NetworkModel(SNModel):
         self.saver = tf.train.Saver()
 
     def train(self, train_iter, test_iter, train_step=100, test_step=100, epochs=1000, sample_per_epoch=1000,
-              learning_rate=0.001, summary_step=5, reshape_input=None, save_model=True):
+              learning_rate=0.01, summary_step=5, reshape_input=None, save_model=True):
         # Build model
         self.build_model(learning_rate=learning_rate)
         self.writer.add_graph(self.sess.graph)
@@ -84,7 +145,8 @@ class NetworkModel(SNModel):
                     train_info_str = "Training set metrics: {} | ".format(", ".join(
                         [": ".join((tm_k.title(), str(tm_v))) for tm_k, tm_v in train_metric_result_dict.items()]))
 
-                    test_data = {self.input_layer_placeholder: test_batch_x, self.output_labels_placeholder: test_batch_y,
+                    test_data = {self.input_layer_placeholder: test_batch_x,
+                                 self.output_labels_placeholder: test_batch_y,
                                  self.is_training_placeholder: False}
                     test_metrics_result = self.sess.run(self.metric_list_func, feed_dict=test_data)
                     test_metric_result_dict = dict(zip(self.metric, test_metrics_result))

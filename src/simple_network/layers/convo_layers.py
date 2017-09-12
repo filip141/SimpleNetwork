@@ -7,7 +7,8 @@ from simple_network.layers.layers import Layer, get_initializer_by_name
 class ConvolutionalLayer(Layer):
 
     def __init__(self, l_size, stddev=0.1, activation='linear', stride=1, padding='same', initializer="xavier",
-                 summaries=True, name='convo_layer'):
+                 summaries=True, name='convo_layer', reuse=None):
+        super(ConvolutionalLayer, self).__init__("Convolutional", name, 'convo_layer', summaries)
         # Define variables
         self.weights = None
         self.bias = None
@@ -15,7 +16,6 @@ class ConvolutionalLayer(Layer):
         self.activated_output = None
 
         # Define layer properties
-        self.layer_type = "Convolutional"
         self.layer_input = None
         self.input_shape = None
         self.output_shape = None
@@ -28,23 +28,19 @@ class ConvolutionalLayer(Layer):
         # Boarders
         self.stride = stride
         self.padding = padding.upper()
-
-        self.layer_name = name
         self.activation = activation
-        self.save_summaries = summaries
+        self.reuse = reuse
 
     def build_graph(self, layer_input):
         self.layer_input = layer_input
         self.input_shape = self.layer_input.get_shape().as_list()[1:]
         input_shape_filters = self.input_shape[-1]
-        with tf.name_scope(self.layer_name):
+        with tf.variable_scope(self.layer_name, reuse=self.reuse):
             # Define weights and biases
-            self.weights = tf.Variable(get_initializer_by_name(self.initializer,
-                                                               [self.layer_size[0], self.layer_size[1],
-                                                                input_shape_filters, self.layer_size[2]],
-                                                               stddev=self.stddev),
-                                       name='weights')
-            self.bias = tf.Variable(tf.ones([self.layer_size[2]]) / 10, name='biases')
+            self.weights = tf.get_variable("weights", [self.layer_size[0], self.layer_size[1],
+                                                       input_shape_filters, self.layer_size[2]],
+                                           initializer=get_initializer_by_name(self.initializer, stddev=self.stddev))
+            self.bias = tf.get_variable("biases", [self.layer_size[2]], initializer=tf.constant_initializer(0.1))
             self.not_activated = tf.nn.conv2d(self.layer_input, self.weights,
                                               strides=[1, self.stride, self.stride, 1],
                                               padding=self.padding) + self.bias
@@ -67,6 +63,7 @@ class ConvolutionalLayer(Layer):
 class MaxPoolingLayer(Layer):
 
     def __init__(self, pool_size, stride=1, padding='same', name='max_pooling', summaries=True):
+        super(MaxPoolingLayer, self).__init__("MaxPooling", name, 'max_pooling', summaries)
         # Define variables
         self.weights = None
         self.bias = None
@@ -74,20 +71,18 @@ class MaxPoolingLayer(Layer):
         self.output = None
 
         # Define layer properties
-        self.layer_type = "MaxPooling"
         self.layer_input = None
         self.input_shape = None
         self.output_shape = None
         self.layer_size = pool_size
+
         self.stride = stride
         self.padding = padding.upper()
-        self.layer_name = name
-        self.save_summaries = summaries
 
     def build_graph(self, layer_input):
         self.layer_input = layer_input
         self.input_shape = self.layer_input.get_shape().as_list()[1:]
-        with tf.name_scope(self.layer_name):
+        with tf.variable_scope(self.layer_name):
             k_size = [1, ] + self.layer_size + [1, ]
             self.output = tf.nn.max_pool(self.layer_input, ksize=k_size, strides=[1, self.stride, self.stride, 1],
                                          padding=self.padding)
@@ -103,12 +98,16 @@ class MaxPoolingLayer(Layer):
 class Flatten(Layer):
 
     def __init__(self, name='flatten'):
+        super(Flatten, self).__init__("Flatten", name, 'flatten', False)
         # Define layer properties
         self.layer_type = "Flatten"
         self.layer_input = None
         self.input_shape = None
         self.output_shape = None
         self.output = None
+
+        # Names
+        self.default_name = 'flatten'
         self.layer_name = name
         self.layer_size = None
 
@@ -116,6 +115,6 @@ class Flatten(Layer):
         self.layer_input = layer_input
         self.input_shape = self.layer_input.get_shape().as_list()[1:]
         self.layer_size = self.input_shape
-        with tf.name_scope(self.layer_name):
+        with tf.variable_scope(self.layer_name):
             self.output = tf.reshape(self.layer_input, [-1, np.prod(self.input_shape)])
         return self.output

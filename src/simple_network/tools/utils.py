@@ -60,3 +60,96 @@ class CIFARDataset(object):
             self.position += 1
             self.position = self.position if self.position < len(self.files_list) else 0
         return batch_matrix, batch_labels
+
+
+class LIVEDataset(object):
+
+    def __init__(self, data_path="./train", new_resolution="320x320", patches=None, is_train=True):
+        self.data_path = data_path
+        self.images_mos = []
+        self.position = 0
+        self.is_train = is_train
+        self.patches = patches
+        self.new_resolution = new_resolution
+        self.res_tuple = [int(x) for x in new_resolution.split("x")]
+        self.fastfading_path = os.path.join(data_path, "fastfading")
+        self.gblur_path = os.path.join(data_path, "gblur")
+        self.j2k_path = os.path.join(data_path, "jp2k")
+        self.jpeg_path = os.path.join(data_path, "jpeg")
+        self.wn_path = os.path.join(data_path, "wn")
+
+        if patches is None:
+            self.patch_res = None
+        else:
+            self.patch_res = [int(x) for x in patches.split("x")]
+            self.n_patches_w = int(self.res_tuple[0] / float(self.patch_res[0]))
+            self.n_patches_h = int(self.res_tuple[1] / float(self.patch_res[1]))
+
+        # Fast fading
+        fast_fading_info = open(os.path.join(self.fastfading_path, "info.txt"), 'r')
+        for ff_line in fast_fading_info:
+            splt_line = ff_line.split(" ")
+            self.images_mos.append((os.path.join(self.fastfading_path, splt_line[1]), float(splt_line[2].rstrip())))
+        # G-Blur
+        gblur_info = open(os.path.join(self.gblur_path, "info.txt"), 'r')
+        for gb_line in gblur_info:
+            splt_line = gb_line.split(" ")
+            self.images_mos.append((os.path.join(self.gblur_path, splt_line[1]), float(splt_line[2].rstrip())))
+        # J2K Path
+        j2k_info = open(os.path.join(self.j2k_path, "info.txt"), 'r')
+        for j2k_line in j2k_info:
+            splt_line = j2k_line.split(" ")
+            self.images_mos.append((os.path.join(self.j2k_path, splt_line[1]), float(splt_line[2].rstrip())))
+        # J2K Path
+        jpeg_info = open(os.path.join(self.jpeg_path, "info.txt"), 'r')
+        for jpeg_line in jpeg_info:
+            splt_line = jpeg_line.split(" ")
+            self.images_mos.append((os.path.join(self.jpeg_path, splt_line[1]), float(splt_line[2].rstrip())))
+        # J2K Path
+        wn_info = open(os.path.join(self.wn_path, "info.txt"), 'r')
+        for wn_line in wn_info:
+            splt_line = wn_line.split(" ")
+            self.images_mos.append((os.path.join(self.wn_path, splt_line[1]), float(splt_line[2].rstrip())))
+        random.shuffle(self.images_mos)
+
+        # Divide into test and train
+        test_len = int(0.2 * len(self.images_mos))
+        self.train_mos = self.images_mos[test_len:]
+        self.test_mos = self.images_mos[:test_len]
+
+    def next_batch(self, number):
+        if self.is_train:
+            img_base = self.train_mos
+        else:
+            img_base = self.test_mos
+        batch_labels = np.zeros((number, 1))
+        if self.patches is None:
+            batch_matrix = np.zeros((number, self.res_tuple[0], self.res_tuple[1], 3))
+        else:
+            batch_matrix = np.zeros((number, self.patch_res[0], self.patch_res[1], 3))
+
+        # iterate over elements
+        img_idx = 0
+        while img_idx < number:
+            im_path, im_mos = img_base[self.position]
+            live_img = cv2.cvtColor(cv2.imread(im_path), cv2.COLOR_BGR2RGB)
+            live_reshaped_img = cv2.resize(live_img, tuple(self.res_tuple), interpolation=cv2.INTER_AREA)
+            if self.patches is None:
+                batch_matrix[img_idx] = live_reshaped_img
+                batch_labels[img_idx] = im_mos
+                img_idx += 1
+            else:
+                for im_x in range(self.n_patches_h):
+                    for im_y in range(self.n_patches_w):
+                        img = live_reshaped_img[
+                              im_x * self.patch_res[0]: (im_x + 1) * self.patch_res[0],
+                              im_y * self.patch_res[1]: (im_y + 1) * self.patch_res[1]
+                              ]
+                        batch_matrix[img_idx] = img
+                        batch_labels[img_idx] = im_mos
+                        img_idx += 1
+                        if img_idx > number:
+                            return batch_matrix, batch_labels
+            self.position += 1
+            self.position = self.position if self.position < len(img_base) else 0
+        return batch_matrix, batch_labels
