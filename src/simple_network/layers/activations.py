@@ -4,8 +4,8 @@ from simple_network.layers.layers import Layer
 
 class ReluLayer(Layer):
 
-    def __init__(self, name='relu', summaries=True):
-        super(ReluLayer, self).__init__("ReluLayer", name, 'relu', summaries)
+    def __init__(self, name='relu', summaries=True, reuse=None):
+        super(ReluLayer, self).__init__("ReluLayer", name, 'relu', summaries, reuse)
         # Define layer properties
         self.layer_input = None
         self.input_shape = None
@@ -26,8 +26,8 @@ class ReluLayer(Layer):
 
 class LeakyReluLayer(Layer):
 
-    def __init__(self, alpha=0.1, name='leaky_relu', summaries=True):
-        super(LeakyReluLayer, self).__init__("LeakyReluLayer", name, 'leaky_relu', summaries)
+    def __init__(self, alpha=0.1, name='leaky_relu', summaries=True, reuse=None):
+        super(LeakyReluLayer, self).__init__("LeakyReluLayer", name, 'leaky_relu', summaries, reuse)
         # Define layer properties
         self.layer_input = None
         self.input_shape = None
@@ -49,8 +49,8 @@ class LeakyReluLayer(Layer):
 
 class SoftmaxLayer(Layer):
 
-    def __init__(self, name='softmax', summaries=True):
-        super(SoftmaxLayer, self).__init__("SoftmaxLayer", name, 'softmax', summaries)
+    def __init__(self, name='softmax', summaries=True, reuse=None):
+        super(SoftmaxLayer, self).__init__("SoftmaxLayer", name, 'softmax', summaries, reuse)
         # Define layer properties
         self.layer_input = None
         self.input_shape = None

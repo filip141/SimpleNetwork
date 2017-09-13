@@ -7,7 +7,7 @@ class FullyConnectedLayer(Layer):
 
     def __init__(self, l_size, stddev=0.1, activation='linear', name='fc_layer', initializer="xavier",
                  summaries=True, reuse=None):
-        super(FullyConnectedLayer, self).__init__("FullyConnected", name, 'fc_layer', summaries)
+        super(FullyConnectedLayer, self).__init__("FullyConnected", name, 'fc_layer', summaries, reuse)
         # Define variables
         self.weights = None
         self.bias = None
@@ -24,7 +24,6 @@ class FullyConnectedLayer(Layer):
         self.stddev = stddev
         self.initializer = initializer
         self.activation = activation
-        self.reuse = reuse
 
     def build_graph(self, layer_input):
         self.layer_input = layer_input

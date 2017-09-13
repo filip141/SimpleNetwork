@@ -8,7 +8,7 @@ class ConvolutionalLayer(Layer):
 
     def __init__(self, l_size, stddev=0.1, activation='linear', stride=1, padding='same', initializer="xavier",
                  summaries=True, name='convo_layer', reuse=None):
-        super(ConvolutionalLayer, self).__init__("Convolutional", name, 'convo_layer', summaries)
+        super(ConvolutionalLayer, self).__init__("Convolutional", name, 'convo_layer', summaries, reuse)
         # Define variables
         self.weights = None
         self.bias = None
@@ -29,7 +29,6 @@ class ConvolutionalLayer(Layer):
         self.stride = stride
         self.padding = padding.upper()
         self.activation = activation
-        self.reuse = reuse
 
     def build_graph(self, layer_input):
         self.layer_input = layer_input
@@ -62,8 +61,8 @@ class ConvolutionalLayer(Layer):
 
 class MaxPoolingLayer(Layer):
 
-    def __init__(self, pool_size, stride=1, padding='same', name='max_pooling', summaries=True):
-        super(MaxPoolingLayer, self).__init__("MaxPooling", name, 'max_pooling', summaries)
+    def __init__(self, pool_size, stride=1, padding='same', name='max_pooling', summaries=True, reuse=None):
+        super(MaxPoolingLayer, self).__init__("MaxPooling", name, 'max_pooling', summaries, reuse)
         # Define variables
         self.weights = None
         self.bias = None
@@ -97,8 +96,8 @@ class MaxPoolingLayer(Layer):
 
 class Flatten(Layer):
 
-    def __init__(self, name='flatten'):
-        super(Flatten, self).__init__("Flatten", name, 'flatten', False)
+    def __init__(self, name='flatten', reuse=None):
+        super(Flatten, self).__init__("Flatten", name, 'flatten', False, reuse)
         # Define layer properties
         self.layer_type = "Flatten"
         self.layer_input = None

@@ -4,8 +4,8 @@ from simple_network.layers.layers import Layer
 
 class SplitterLayer(Layer):
 
-    def __init__(self, name='splitter', ksize=160, summaries=True):
-        super(SplitterLayer, self).__init__("SplitterLayer", name, 'splitter', summaries)
+    def __init__(self, name='splitter', ksize=160, summaries=True, reuse=None):
+        super(SplitterLayer, self).__init__("SplitterLayer", name, 'splitter', summaries, reuse)
         # Define layer properties
         self.layer_input = None
         self.input_shape = None

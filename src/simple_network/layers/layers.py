@@ -5,7 +5,7 @@ from abc import ABCMeta, abstractmethod
 class Layer(object):
     __metaclass__ = ABCMeta
 
-    def __init__(self, layer_type, layer_name, default_name, save_summaries):
+    def __init__(self, layer_type, layer_name, default_name, save_summaries, reuse):
         # Define layer properties
         self.layer_type = layer_type
 
@@ -13,6 +13,7 @@ class Layer(object):
         self.layer_name = layer_name
         self.default_name = default_name
         self.save_summaries = save_summaries
+        self.reuse = reuse
 
     @abstractmethod
     def build_graph(self, layer_input):
@@ -21,8 +22,8 @@ class Layer(object):
 
 class DropoutLayer(Layer):
 
-    def __init__(self, percent=0.2, name='dropout', summaries=True):
-        super(DropoutLayer, self).__init__("DropoutLayer", name, 'dropout', summaries)
+    def __init__(self, percent=0.2, name='dropout', summaries=True, reuse=None):
+        super(DropoutLayer, self).__init__("DropoutLayer", name, 'dropout', summaries, reuse)
         # Define layer properties
         self.layer_input = None
         self.input_shape = None
@@ -49,9 +50,9 @@ class DropoutLayer(Layer):
 
 class BatchNormalizationLayer(Layer):
 
-    def __init__(self, name='batch_normalization', summaries=True):
+    def __init__(self, name='batch_normalization', summaries=True, reuse=None):
         super(BatchNormalizationLayer, self).__init__("BatchNormalizationLayer", name,
-                                                      'batch_normalization', summaries)
+                                                      'batch_normalization', summaries, reuse)
         # Define layer properties
         self.layer_input = None
         self.input_shape = None
@@ -69,7 +70,7 @@ class BatchNormalizationLayer(Layer):
         self.layer_size = self.input_shape
         with tf.name_scope(self.layer_name):
             self.output = tf.contrib.layers.batch_norm(self.layer_input, center=True, scale=True,
-                                                       is_training=self.is_training, reuse=True,
+                                                       is_training=self.is_training, reuse=self.reuse,
                                                        scope="bn_{}".format(self.layer_name))
             if self.save_summaries:
                 with tf.variable_scope("bn_{}".format(self.layer_name), reuse=True):
