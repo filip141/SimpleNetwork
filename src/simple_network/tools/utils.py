@@ -96,26 +96,36 @@ class LIVEDataset(object):
         fast_fading_info = open(os.path.join(self.fastfading_path, "info.txt"), 'r')
         for ff_line in fast_fading_info:
             splt_line = ff_line.split(" ")
+            if len(splt_line) < 3:
+                continue
             self.images_mos.append((os.path.join(self.fastfading_path, splt_line[1]), float(splt_line[2].rstrip())))
         # G-Blur
         gblur_info = open(os.path.join(self.gblur_path, "info.txt"), 'r')
         for gb_line in gblur_info:
             splt_line = gb_line.split(" ")
+            if len(splt_line) < 3:
+                continue
             self.images_mos.append((os.path.join(self.gblur_path, splt_line[1]), float(splt_line[2].rstrip())))
         # J2K Path
         j2k_info = open(os.path.join(self.j2k_path, "info.txt"), 'r')
         for j2k_line in j2k_info:
             splt_line = j2k_line.split(" ")
+            if len(splt_line) < 3:
+                continue
             self.images_mos.append((os.path.join(self.j2k_path, splt_line[1]), float(splt_line[2].rstrip())))
         # J2K Path
         jpeg_info = open(os.path.join(self.jpeg_path, "info.txt"), 'r')
         for jpeg_line in jpeg_info:
             splt_line = jpeg_line.split(" ")
+            if len(splt_line) < 3:
+                continue
             self.images_mos.append((os.path.join(self.jpeg_path, splt_line[1]), float(splt_line[2].rstrip())))
         # J2K Path
         wn_info = open(os.path.join(self.wn_path, "info.txt"), 'r')
         for wn_line in wn_info:
             splt_line = wn_line.split(" ")
+            if len(splt_line) < 3:
+                continue
             self.images_mos.append((os.path.join(self.wn_path, splt_line[1]), float(splt_line[2].rstrip())))
         random.shuffle(self.images_mos)
 
