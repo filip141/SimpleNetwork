@@ -19,7 +19,18 @@ class SNModel(object):
     def __init__(self, input_size, summary_path=None, metric=None, input_summary=None):
         # If summary_path is None set tempdir
         if summary_path is None:
-            summary_path = tempfile.gettempdir()
+            self.summary_path = tempfile.gettempdir()
+        else:
+            self.summary_path = os.path.join(summary_path, "logs")
+            if os.path.isdir(self.summary_path):
+                # Remove old tensor files
+                files_in_dir = os.listdir(self.summary_path)
+                for s_file in files_in_dir:
+                    os.remove(os.path.join(self.summary_path, s_file))
+            else:
+                # Create dict if not exist
+                os.mkdir(self.summary_path)
+
         if metric is None:
             metric = []
 
@@ -39,11 +50,11 @@ class SNModel(object):
         self.loss_func = None
         self.sess = tf.Session()
         self.saver = None
-        self.summary_path = summary_path
-        self.writer = tf.summary.FileWriter(summary_path)
+        self.save_path = os.path.join(summary_path, "model")
+        self.writer = tf.summary.FileWriter(self.summary_path)
 
     def save(self, global_step=None):
-        self.saver.save(self.sess, os.path.join(self.summary_path, "tensorflow_model"),
+        self.saver.save(self.sess, os.path.join(self.save_path, "tensorflow_model"),
                         global_step=global_step)
 
     def restore(self):
