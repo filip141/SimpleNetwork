@@ -42,6 +42,7 @@ class NetworkParallel(SNModel):
 
     def __init__(self, input_size, summary_path=None, metric=None, input_summary=None):
         # If summary_path is None set tempdir
+        self.model_build = False
         super(NetworkParallel, self).__init__(input_size, summary_path, metric, input_summary)
 
     def build_node(self, node, layer_input, layer_idx):
@@ -65,10 +66,9 @@ class NetworkParallel(SNModel):
                 output_val = outputs_list
         return output_val
 
-    def build_model(self, learning_rate):
+    def build_model(self, learning_rate=0.01):
         # Define input
         logger.info("-" * 90)
-
         with tf.name_scope("input_layer"):
             self.prepare_input()
         logger.info("Input layer| shape: {}".format(self.input_size))
@@ -109,12 +109,14 @@ class NetworkParallel(SNModel):
         init = tf.global_variables_initializer()
         self.sess.run(init)
         # Initialize saver for future saving weights
+        self.model_build = True
         self.saver = tf.train.Saver()
 
     def train(self, train_iter, test_iter, train_step=100, test_step=100, epochs=1000, sample_per_epoch=1000,
-              learning_rate=0.01, summary_step=5, reshape_input=None, save_model=True):
-        # Build model
-        self.build_model(learning_rate=learning_rate)
+              summary_step=5, reshape_input=None, save_model=True):
+        # Check Build model
+        if not self.model_build:
+            raise AttributeError("Model should be build before training it.")
         self.writer.add_graph(self.sess.graph)
         # Train
         start_time = time.time()

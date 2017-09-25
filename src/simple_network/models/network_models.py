@@ -11,6 +11,7 @@ class NetworkModel(SNModel):
 
     def __init__(self, input_size, summary_path=None, metric=None, input_summary=None):
         # If summary_path is None set tempdir
+        self.model_build = False
         super(NetworkModel, self).__init__(input_size, summary_path, metric, input_summary)
 
     def build_model(self, learning_rate):
@@ -48,12 +49,14 @@ class NetworkModel(SNModel):
         init = tf.global_variables_initializer()
         self.sess.run(init)
         # Initialize saver for future saving weights
+        self.model_build = True
         self.saver = tf.train.Saver()
 
     def train(self, train_iter, test_iter, train_step=100, test_step=100, epochs=1000, sample_per_epoch=1000,
-              learning_rate=0.001, summary_step=5, reshape_input=None, save_model=True):
-        # Build model
-        self.build_model(learning_rate=learning_rate)
+              summary_step=5, reshape_input=None, save_model=True):
+        # Check Build model
+        if not self.model_build:
+            raise AttributeError("Model should be build before training it.")
         self.writer.add_graph(self.sess.graph)
         # Train
         start_time = time.time()
