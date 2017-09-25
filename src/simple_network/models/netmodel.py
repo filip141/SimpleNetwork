@@ -37,7 +37,7 @@ class SNModel(object):
         self.metric_list_func = []
         self.optimizer_func = None
         self.loss_func = None
-        self.sess = tf.InteractiveSession()
+        self.sess = tf.Session()
         self.saver = None
         self.summary_path = summary_path
         self.writer = tf.summary.FileWriter(summary_path)
