@@ -60,7 +60,7 @@ class SNModel(object):
                         global_step=global_step)
 
     def restore(self):
-        self.saver.restore(self.sess, tf.train.latest_checkpoint(self.summary_path))
+        self.saver.restore(self.sess, tf.train.latest_checkpoint(self.save_path))
 
     def add(self, new_layer):
         self.layers.append(new_layer)
