@@ -51,6 +51,8 @@ class SNModel(object):
         self.sess = tf.Session()
         self.saver = None
         self.save_path = os.path.join(summary_path, "model")
+        if not os.path.isdir(self.save_path):
+            os.mkdir(self.save_path)
         self.writer = tf.summary.FileWriter(self.summary_path)
 
     def save(self, global_step=None):
