@@ -2,6 +2,7 @@ import tensorflow as tf
 from simple_network.train.losses import cross_entropy as cross_ent
 from simple_network.train.losses import mean_square as mse_loss
 from simple_network.train.losses import mean_absolute as mae_loss
+from simple_network.train.losses import mean_absolute_weight as mae_w_4
 
 
 def cross_entropy(logits, labels):
@@ -23,4 +24,10 @@ def mean_square(logits, labels):
 
 def mean_absolute(logits, labels):
     mae = mae_loss(logits=logits, labels=labels)
+    return mae
+
+
+def mean_absolute_weighted_4(logits, labels):
+    loss_data = {"nimages": 4}
+    mae = mae_w_4(logits=logits, labels=labels, loss_data=loss_data)
     return mae

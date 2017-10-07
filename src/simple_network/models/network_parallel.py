@@ -1,6 +1,7 @@
 import time
 import copy
 import logging
+import numpy as np
 import tensorflow as tf
 from simple_network.layers.layers import Layer
 from simple_network.models.netmodel import SNModel
@@ -93,12 +94,16 @@ class NetworkParallel(SNModel):
         init = tf.global_variables_initializer()
         self.sess.run(init)
 
+        # Save layer output
+        self.last_layer_prediction = layer_output
+
         self.loss_func = self.get_loss_by_name()(logits=layer_output, labels=y_labels, loss_data=self.loss_data)
         logger.info("Loss function: {}".format(self.loss))
         self.optimizer_func = self.get_optimizer_by_name()(self.loss_func, learning_rate, self.optimizer_data)
         logger.info("Optimizer: {}".format(self.optimizer))
 
         # Initialize metrics
+        self.last_layer_prediction = layer_output
         metric_list_func = self.get_metric_by_name()
         for metric_item in metric_list_func:
             self.metric_list_func.append(metric_item(logits=layer_output, labels=y_labels))
@@ -113,11 +118,12 @@ class NetworkParallel(SNModel):
         self.saver = tf.train.Saver()
 
     def train(self, train_iter, test_iter, train_step=100, test_step=100, epochs=1000, sample_per_epoch=1000,
-              summary_step=5, reshape_input=None, save_model=True):
+              summary_step=5, reshape_input=None, save_model=True, print_y_batch_count=False):
         # Check Build model
         if not self.model_build:
             raise AttributeError("Model should be build before training it.")
-        self.writer.add_graph(self.sess.graph)
+        self.train_writer.add_graph(self.sess.graph)
+        self.test_writer.add_graph(self.sess.graph)
         # Train
         start_time = time.time()
         merged_summary = tf.summary.merge_all()
@@ -130,6 +136,13 @@ class NetworkParallel(SNModel):
                 # reshape train input if defined
                 if reshape_input is not None:
                     batch_x = batch_x.reshape([train_step, ] + reshape_input)
+                if print_y_batch_count:
+                    unique, counts = np.unique(batch_y, return_counts=True)
+                    assert len(set([x[0] for x in batch_y[:32].tolist()])) == 1
+                    assert len(set([x[0] for x in batch_y[32:64].tolist()])) == 1
+                    assert len(set([x[0] for x in batch_y[64:96].tolist()])) == 1
+                    assert len(set([x[0] for x in batch_y[96:128].tolist()])) == 1
+                    logger.info("Printed Batch Y Counts: {}".format(dict(zip(unique, counts))))
 
                 # Load Test batch
                 test_batch_x, test_batch_y = test_iter.next_batch(test_step)
@@ -159,7 +172,9 @@ class NetworkParallel(SNModel):
 
                 # Save summary
                 if sample_iter % summary_step == 0:
-                    sum_res = self.sess.run(merged_summary, train_data)
-                    self.writer.add_summary(sum_res, epoch_idx * sample_per_epoch + sample_iter)
+                    sum_res_train = self.sess.run(merged_summary, train_data)
+                    sum_res_test = self.sess.run(merged_summary, test_data)
+                    self.train_writer.add_summary(sum_res_train, epoch_idx * sample_per_epoch + sample_iter)
+                    self.test_writer.add_summary(sum_res_test, epoch_idx * sample_per_epoch + sample_iter)
             if save_model:
                 self.save(global_step=epoch_idx * sample_per_epoch)

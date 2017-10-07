@@ -20,6 +20,46 @@ def variable_summaries(var, name):
         tf.summary.histogram(name, var)
 
 
+def img_patch_spliter(im_path, patch_num=32, patch_res="32x32", patches_method="split"):
+    patch_res_tpl = [int(x) for x in patch_res.split("x")]
+    batch_matrix = np.zeros((patch_num, patch_res_tpl[0], patch_res_tpl[1], 3))
+
+    # Read image from patch
+    live_img = cv2.cvtColor(cv2.imread(im_path), cv2.COLOR_BGR2RGB)
+    img_shape = live_img.shape
+
+    # Return image or patches
+    n_patches_w = int(img_shape[1] / float(patch_res_tpl[0]))
+    n_patches_h = int(img_shape[0] / float(patch_res_tpl[1]))
+    # iterate over elements
+    img_idx = 0
+    while img_idx < patch_num:
+        if patches_method == 'split':
+            # Create patches
+            for im_x in range(n_patches_h):
+                for im_y in range(n_patches_w):
+                    img = live_img[
+                          im_x * patch_res_tpl[0]: (im_x + 1) * patch_res_tpl[0],
+                          im_y * patch_res_tpl[1]: (im_y + 1) * patch_res_tpl[1]
+                          ]
+                    batch_matrix[img_idx] = img
+                    img_idx += 1
+                    if img_idx >= patch_num:
+                        return batch_matrix
+        elif patches_method == 'random':
+            for p_idx in range(0, patch_num):
+                w_pos = random.randint(0, img_shape[1] - patch_res_tpl[0])
+                h_pos = random.randint(0, img_shape[0] - patch_res_tpl[1])
+                img = live_img[h_pos:h_pos + patch_res_tpl[1], w_pos:w_pos + patch_res_tpl[0]]
+                batch_matrix[img_idx] = img
+                img_idx += 1
+                if img_idx >= patch_num:
+                    return batch_matrix
+        else:
+            raise AttributeError("Method for splitting patches not defined.")
+    return batch_matrix
+
+
 class CIFARDataset(object):
 
     def __init__(self, data_path="./train"):

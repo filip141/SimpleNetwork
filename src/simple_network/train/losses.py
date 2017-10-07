@@ -38,7 +38,7 @@ def mean_absolute_weight(logits, labels, loss_data=None):
     if not isinstance(logits, list):
         raise AttributeError("Loss only available for Node output.")
     loss = 0
-    nimages = loss_data.get("nimages", 2)
+    nimages = loss_data.get("nimages", 4)
     reshape_weights = loss_data.get("reshape_weights", None)
     with tf.name_scope('mean_absolute_weight'):
         batch_images_w = tf.split(value=logits[1], num_or_size_splits=nimages, axis=0)
@@ -51,6 +51,8 @@ def mean_absolute_weight(logits, labels, loss_data=None):
             if reshape_weights is not None:
                 w_img = tf.reshape(b_i_w, [1, reshape_weights[0], reshape_weights[1], 1])
                 tf.summary.image("weight_img", w_img, 1)
+                p_img = tf.reshape(b_t_l, [1, reshape_weights[0], reshape_weights[1], 1])
+                tf.summary.image("predict_img", p_img, 1)
             estimated_label = tf.reduce_sum(b_i_w * b_i_p) / tf.reduce_sum(b_i_w)
             loss += tf.reduce_mean(tf.abs(estimated_label - b_t_l[0]))
         tf.summary.scalar("mean_absolute_weight", loss)

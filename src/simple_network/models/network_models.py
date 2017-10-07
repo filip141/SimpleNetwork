@@ -32,6 +32,9 @@ class NetworkModel(SNModel):
                                                         name='labels')
         y_labels = self.output_labels_placeholder
 
+        # Save layer output
+        self.last_layer_prediction = layer_output
+
         # Define loss and optimizer
         self.loss_func = self.get_loss_by_name()(logits=layer_output, labels=y_labels, loss_data=self.loss_data)
         logger.info("Loss function: {}".format(self.loss))
@@ -57,7 +60,8 @@ class NetworkModel(SNModel):
         # Check Build model
         if not self.model_build:
             raise AttributeError("Model should be build before training it.")
-        self.writer.add_graph(self.sess.graph)
+        self.train_writer.add_graph(self.sess.graph)
+        self.test_writer.add_graph(self.sess.graph)
         # Train
         start_time = time.time()
         merged_summary = tf.summary.merge_all()
@@ -98,7 +102,9 @@ class NetworkModel(SNModel):
 
                 # Save summary
                 if sample_iter % summary_step == 0:
-                    sum_res = self.sess.run(merged_summary, train_data)
-                    self.writer.add_summary(sum_res, epoch_idx * sample_per_epoch + sample_iter)
+                    sum_res_train = self.sess.run(merged_summary, train_data)
+                    sum_res_test = self.sess.run(merged_summary, test_data)
+                    self.train_writer.add_summary(sum_res_train, epoch_idx * sample_per_epoch + sample_iter)
+                    self.test_writer.add_summary(sum_res_test, epoch_idx * sample_per_epoch + sample_iter)
             if save_model:
                 self.save(global_step=epoch_idx * sample_per_epoch)

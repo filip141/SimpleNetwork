@@ -3,7 +3,8 @@ import logging
 import tempfile
 import tensorflow as tf
 from simple_network.layers import BatchNormalizationLayer, DropoutLayer
-from simple_network.metrics import cross_entropy, accuracy, mean_square, mean_absolute
+from simple_network.metrics import cross_entropy, accuracy, mean_square, mean_absolute, \
+    mean_absolute_weighted_4
 from simple_network.train.losses import cross_entropy as cross_entropy_loss
 from simple_network.train.losses import mean_square as mean_square_loss
 from simple_network.train.losses import mean_absolute as mean_absolute_loss
@@ -38,6 +39,7 @@ class SNModel(object):
         self.metric = metric
         self.input_size = input_size
         self.input_summary = input_summary
+        self.last_layer_prediction = None
         self.input_layer_placeholder = None
         self.output_labels_placeholder = None
         self.is_training_placeholder = None
@@ -53,7 +55,8 @@ class SNModel(object):
         self.save_path = os.path.join(summary_path, "model")
         if not os.path.isdir(self.save_path):
             os.mkdir(self.save_path)
-        self.writer = tf.summary.FileWriter(self.summary_path)
+        self.train_writer = tf.summary.FileWriter(os.path.join(self.summary_path, "train"))
+        self.test_writer = tf.summary.FileWriter(os.path.join(self.summary_path, "test"))
 
     def save(self, global_step=None):
         self.saver.save(self.sess, os.path.join(self.save_path, "tensorflow_model"),
@@ -128,6 +131,8 @@ class SNModel(object):
                 metric_list.append(mean_square)
             elif metric_item == "mae":
                 metric_list.append(mean_absolute)
+            elif metric_item == "mae_weighted_4":
+                metric_list.append(mean_absolute_weighted_4)
             else:
                 raise AttributeError("Metric {} not defined.".format(self.loss))
         return metric_list
@@ -147,3 +152,6 @@ class SNModel(object):
                 summary_input_data = tf.reshape(summary_input_data, reshape_size)
             number_of_img = self.input_summary.get('img_number', 1)
             tf.summary.image('input', summary_input_data, number_of_img)
+
+    def get_last_layer_prediction(self):
+        return self.last_layer_prediction
