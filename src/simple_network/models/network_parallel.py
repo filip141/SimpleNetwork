@@ -118,7 +118,7 @@ class NetworkParallel(SNModel):
         self.saver = tf.train.Saver()
 
     def train(self, train_iter, test_iter, train_step=100, test_step=100, epochs=1000, sample_per_epoch=1000,
-              summary_step=5, reshape_input=None, save_model=True, print_y_batch_count=False):
+              summary_step=5, reshape_input=None, save_model=True):
         # Check Build model
         if not self.model_build:
             raise AttributeError("Model should be build before training it.")
@@ -136,13 +136,6 @@ class NetworkParallel(SNModel):
                 # reshape train input if defined
                 if reshape_input is not None:
                     batch_x = batch_x.reshape([train_step, ] + reshape_input)
-                if print_y_batch_count:
-                    unique, counts = np.unique(batch_y, return_counts=True)
-                    assert len(set([x[0] for x in batch_y[:32].tolist()])) == 1
-                    assert len(set([x[0] for x in batch_y[32:64].tolist()])) == 1
-                    assert len(set([x[0] for x in batch_y[64:96].tolist()])) == 1
-                    assert len(set([x[0] for x in batch_y[96:128].tolist()])) == 1
-                    logger.info("Printed Batch Y Counts: {}".format(dict(zip(unique, counts))))
 
                 # Load Test batch
                 test_batch_x, test_batch_y = test_iter.next_batch(test_step)
