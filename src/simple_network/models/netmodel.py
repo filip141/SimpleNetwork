@@ -1,4 +1,5 @@
 import os
+import shutil
 import logging
 import tempfile
 import tensorflow as tf
@@ -27,7 +28,7 @@ class SNModel(object):
                 # Remove old tensor files
                 files_in_dir = os.listdir(self.summary_path)
                 for s_file in files_in_dir:
-                    os.remove(os.path.join(self.summary_path, s_file))
+                    shutil.rmtree(os.path.join(self.summary_path, s_file))
             else:
                 # Create dict if not exist
                 os.mkdir(self.summary_path)
