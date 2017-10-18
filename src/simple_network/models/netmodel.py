@@ -2,6 +2,7 @@ import os
 import logging
 import tempfile
 import tensorflow as tf
+from simple_network.tools.utils import create_sprite_image
 from simple_network.layers import BatchNormalizationLayer, DropoutLayer
 from simple_network.metrics import cross_entropy, accuracy, mean_square, mean_absolute, \
     mean_absolute_weighted_4
@@ -9,7 +10,7 @@ from simple_network.train.losses import cross_entropy as cross_entropy_loss
 from simple_network.train.losses import mean_square as mean_square_loss
 from simple_network.train.losses import mean_absolute as mean_absolute_loss
 from simple_network.train.losses import mean_absolute_weight as mean_absolute_weight_loss
-from simple_network.train.optimizers import adam_optimizer, momentum_optimizer, rmsprop_optimizer
+from simple_network.train.optimizers import adam_optimizer, momentum_optimizer, rmsprop_optimizer, sgd_optimizer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -39,6 +40,7 @@ class SNModel(object):
         self.metric = metric
         self.input_size = input_size
         self.input_summary = input_summary
+        self.layer_outputs = []
         self.last_layer_prediction = None
         self.input_layer_placeholder = None
         self.output_labels_placeholder = None
@@ -52,6 +54,7 @@ class SNModel(object):
         self.loss_func = None
         self.sess = tf.Session()
         self.saver = None
+        self.embedding_handler = None
         self.save_path = os.path.join(summary_path, "model")
         if not os.path.isdir(self.save_path):
             os.mkdir(self.save_path)
@@ -117,6 +120,8 @@ class SNModel(object):
             return momentum_optimizer
         elif self.optimizer == "RMSprop":
             return rmsprop_optimizer
+        elif self.optimizer == "SGD":
+            return sgd_optimizer
         else:
             raise AttributeError("Optimizer {} not defined.".format(self.loss))
 
@@ -155,3 +160,19 @@ class SNModel(object):
 
     def get_last_layer_prediction(self):
         return self.last_layer_prediction
+
+    def add_embedding_monitor(self, em_iterator, em_num, embedding_input, img_res, log_dir):
+        log_path = os.path.join(log_dir, "train")
+        img_path, meta_path, images, labels = create_sprite_image(em_iterator, log_path, img_num=em_num)
+        layer_size = embedding_input.get_shape().as_list()[-1]
+        embedding = tf.Variable(tf.zeros([em_num, layer_size]), name="test_embedding")
+        self.embedding_handler = embedding.assign(embedding_input)
+
+        config = tf.contrib.tensorboard.plugins.projector.ProjectorConfig()
+        embedding_config = config.embeddings.add()
+        embedding_config.tensor_name = embedding.name
+        embedding_config.sprite.image_path = img_path
+        embedding_config.metadata_path = meta_path
+        embedding_config.sprite.single_image_dim.extend(img_res)
+        tf.contrib.tensorboard.plugins.projector.visualize_embeddings(self.train_writer, config)
+        return images, labels

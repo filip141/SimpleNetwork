@@ -1,5 +1,6 @@
 import time
 import logging
+import numpy as np
 import tensorflow as tf
 from simple_network.models.netmodel import SNModel
 
@@ -65,6 +66,8 @@ class NetworkModel(SNModel):
         # Train
         start_time = time.time()
         merged_summary = tf.summary.merge_all()
+        moving_avg_train = [[] for _ in range(len(self.metric_list_func))]
+        moving_avg_test = [[] for _ in range(len(self.metric_list_func))]
         for epoch_idx in range(epochs):
             # samples in epoch
             logger.info("Training: Epoch number {}".format(epoch_idx))
@@ -87,14 +90,21 @@ class NetworkModel(SNModel):
                 self.sess.run(self.optimizer_func, feed_dict=train_data)
                 if self.metric is not None:
                     train_metrics_result = self.sess.run(self.metric_list_func, feed_dict=train_data)
-                    train_metric_result_dict = dict(zip(self.metric, train_metrics_result))
+                    moving_avg_train = [x_it[-9:] + [train_met] for x_it, train_met in zip(moving_avg_train,
+                                                                                           train_metrics_result)]
+                    moving_avg_train_mean = [np.mean(x_it_n) for x_it_n in moving_avg_train]
+                    train_metric_result_dict = dict(zip(self.metric, moving_avg_train_mean))
                     train_info_str = "Training set metrics: {} | ".format(", ".join(
                         [": ".join((tm_k.title(), str(tm_v))) for tm_k, tm_v in train_metric_result_dict.items()]))
 
-                    test_data = {self.input_layer_placeholder: test_batch_x, self.output_labels_placeholder: test_batch_y,
+                    test_data = {self.input_layer_placeholder: test_batch_x,
+                                 self.output_labels_placeholder: test_batch_y,
                                  self.is_training_placeholder: False}
                     test_metrics_result = self.sess.run(self.metric_list_func, feed_dict=test_data)
-                    test_metric_result_dict = dict(zip(self.metric, test_metrics_result))
+                    moving_avg_test = [x_it[-9:] + [train_met] for x_it, train_met in zip(moving_avg_test,
+                                                                                          test_metrics_result)]
+                    moving_avg_test_mean = [np.mean(x_it_n) for x_it_n in moving_avg_test]
+                    test_metric_result_dict = dict(zip(self.metric, moving_avg_test_mean))
                     test_info_str = "Test set metrics: {}".format(", ".join(
                         [": ".join((tm_k.title(), str(tm_v))) for tm_k, tm_v in test_metric_result_dict.items()]))
                     logger.info(train_info_str + test_info_str + " | Sample number: {} | Time: {}"

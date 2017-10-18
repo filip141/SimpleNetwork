@@ -56,3 +56,19 @@ def rmsprop_optimizer(loss, learning_rate, optimizer_data, name=""):
         with tf.control_dependencies(update_ops):
             train_step = optimizer.minimize(loss)
     return train_step
+
+
+def sgd_optimizer(loss, learning_rate, optimizer_data, name=""):
+    # Define name
+    if name:
+        train_name = "train_{}".format(name)
+    else:
+        train_name = "train"
+    # Define optimizer
+    with tf.name_scope(train_name):
+        use_locking = optimizer_data.get("use_locking", False)
+        optimizer = tf.train.GradientDescentOptimizer(learning_rate, use_locking=use_locking)
+        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        with tf.control_dependencies(update_ops):
+            train_step = optimizer.minimize(loss)
+    return train_step

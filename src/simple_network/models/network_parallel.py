@@ -1,3 +1,4 @@
+import os
 import time
 import copy
 import logging
@@ -84,6 +85,7 @@ class NetworkParallel(SNModel):
                 layer_output = self.build_node(layer, layer_input, l_idx)
             else:
                 raise AttributeError("Object not defined {}".format(type(layer)))
+            self.layer_outputs.append(layer_output)
             layer_input = layer_output
         # Output placeholder
         self.output_labels_placeholder = tf.placeholder(tf.float32, [None, self.layers[-1].layer_size[-1]],
@@ -118,7 +120,7 @@ class NetworkParallel(SNModel):
         self.saver = tf.train.Saver()
 
     def train(self, train_iter, test_iter, train_step=100, test_step=100, epochs=1000, sample_per_epoch=1000,
-              summary_step=5, reshape_input=None, save_model=True):
+              summary_step=5, reshape_input=None, embedding_num=None, save_model=True):
         # Check Build model
         if not self.model_build:
             raise AttributeError("Model should be build before training it.")
@@ -127,6 +129,14 @@ class NetworkParallel(SNModel):
         # Train
         start_time = time.time()
         merged_summary = tf.summary.merge_all()
+        embedd_img, embedd_labels = None, None
+        if embedding_num is not None:
+            embedd_img, embedd_labels = self.add_embedding_monitor(em_iterator=train_iter, em_num=embedding_num,
+                                                                   embedding_input=self.layer_outputs[-5],
+                                                                   img_res=self.input_size,
+                                                                   log_dir=self.summary_path)
+        moving_avg_train = [[] for _ in range(len(self.metric_list_func))]
+        moving_avg_test = [[] for _ in range(len(self.metric_list_func))]
         for epoch_idx in range(epochs):
             # samples in epoch
             logger.info("Training: Epoch number {}".format(epoch_idx))
@@ -149,7 +159,10 @@ class NetworkParallel(SNModel):
                 self.sess.run(self.optimizer_func, feed_dict=train_data)
                 if self.metric is not None:
                     train_metrics_result = self.sess.run(self.metric_list_func, feed_dict=train_data)
-                    train_metric_result_dict = dict(zip(self.metric, train_metrics_result))
+                    moving_avg_train = [x_it[-9:] + [train_met] for x_it, train_met in zip(moving_avg_train,
+                                                                                           train_metrics_result)]
+                    moving_avg_train_mean = [np.mean(x_it_n) for x_it_n in moving_avg_train]
+                    train_metric_result_dict = dict(zip(self.metric, moving_avg_train_mean))
                     train_info_str = "Training set metrics: {} | ".format(", ".join(
                         [": ".join((tm_k.title(), str(tm_v))) for tm_k, tm_v in train_metric_result_dict.items()]))
 
@@ -157,7 +170,10 @@ class NetworkParallel(SNModel):
                                  self.output_labels_placeholder: test_batch_y,
                                  self.is_training_placeholder: False}
                     test_metrics_result = self.sess.run(self.metric_list_func, feed_dict=test_data)
-                    test_metric_result_dict = dict(zip(self.metric, test_metrics_result))
+                    moving_avg_test = [x_it[-9:] + [train_met] for x_it, train_met in zip(moving_avg_test,
+                                                                                          test_metrics_result)]
+                    moving_avg_test_mean = [np.mean(x_it_n) for x_it_n in moving_avg_test]
+                    test_metric_result_dict = dict(zip(self.metric, moving_avg_test_mean))
                     test_info_str = "Test set metrics: {}".format(", ".join(
                         [": ".join((tm_k.title(), str(tm_v))) for tm_k, tm_v in test_metric_result_dict.items()]))
                     logger.info(train_info_str + test_info_str + " | Sample number: {} | Time: {}"
@@ -169,5 +185,15 @@ class NetworkParallel(SNModel):
                     sum_res_test = self.sess.run(merged_summary, test_data)
                     self.train_writer.add_summary(sum_res_train, epoch_idx * sample_per_epoch + sample_iter)
                     self.test_writer.add_summary(sum_res_test, epoch_idx * sample_per_epoch + sample_iter)
+                # Add embeddings
+                if (epoch_idx * sample_per_epoch + sample_iter) % 10 == 0:
+                    if self.embedding_handler is not None:
+                        embedding_data = {self.input_layer_placeholder: embedd_img,
+                                          self.output_labels_placeholder: embedd_labels,
+                                          self.is_training_placeholder: False}
+                        self.sess.run(self.embedding_handler, feed_dict=embedding_data)
+                        log_path = os.path.join(self.summary_path, "train")
+                        self.saver.save(self.sess, os.path.join(log_path, "model.ckpt"),
+                                        epoch_idx * sample_per_epoch + sample_iter)
             if save_model:
                 self.save(global_step=epoch_idx * sample_per_epoch)

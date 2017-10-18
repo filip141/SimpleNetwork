@@ -35,14 +35,14 @@ class FullyConnectedLayer(Layer):
             self.bias = tf.get_variable("biases", [self.layer_size[1]], initializer=tf.zeros_initializer())
             self.not_activated = tf.matmul(self.layer_input, self.weights) + self.bias
 
-            #  Get histograms
-            if self.save_summaries:
-                variable_summaries(self.weights, "weights")
-                variable_summaries(self.bias, "biases")
             if self.activation != 'linear':
                 self.activated_output = getattr(tf.nn, self.activation)(self.not_activated)
             else:
                 self.activated_output = self.not_activated
             self.output_shape = self.activated_output.get_shape().as_list()[1:]
-            tf.summary.histogram("activations", self.activated_output)
+            #  Get histograms
+            if self.save_summaries:
+                variable_summaries(self.weights, "weights")
+                variable_summaries(self.bias, "biases")
+                tf.summary.histogram("activations", self.activated_output)
         return self.activated_output

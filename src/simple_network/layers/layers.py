@@ -1,5 +1,69 @@
 import tensorflow as tf
 from abc import ABCMeta, abstractmethod
+from tensorflow.python.training import moving_averages
+
+
+def batch_norm(x, scope, is_training, epsilon=0.001, decay=0.99):
+    """
+    Returns a batch normalization layer that automatically switch between train and test phases based on the
+    tensor is_training
+
+    Args:
+        x: input tensor
+        scope: scope name
+        is_training: boolean tensor or variable
+        epsilon: epsilon parameter - see batch_norm_layer
+        decay: epsilon parameter - see batch_norm_layer
+
+    Returns:
+        The correct batch normalization layer based on the value of is_training
+    """
+
+    return tf.cond(
+        is_training,
+        lambda: batch_norm_layer(x=x, scope=scope, epsilon=epsilon, decay=decay, is_training=True, reuse=None),
+        lambda: batch_norm_layer(x=x, scope=scope, epsilon=epsilon, decay=decay, is_training=False, reuse=True),
+    )
+
+
+def batch_norm_layer(x, scope, is_training, epsilon=0.001, decay=0.99, reuse=None):
+    """
+    Performs a batch normalization layer
+
+    Args:
+        x: input tensor
+        scope: scope name
+        is_training: python boolean value
+        epsilon: the variance epsilon - a small float number to avoid dividing by 0
+        decay: the moving average decay
+
+    Returns:
+        The ops of a batch normalization layer
+    """
+    with tf.variable_scope(scope, reuse=reuse):
+        shape = x.get_shape().as_list()
+        # gamma: a trainable scale factor
+        gamma = tf.get_variable("gamma", shape[-1], initializer=tf.constant_initializer(1.0), trainable=True)
+        # beta: a trainable shift value
+        beta = tf.get_variable("beta", shape[-1], initializer=tf.constant_initializer(0.0), trainable=True)
+        moving_avg = tf.get_variable("moving_avg", shape[-1], initializer=tf.constant_initializer(0.0),
+                                     trainable=False)
+        moving_var = tf.get_variable("moving_var", shape[-1], initializer=tf.constant_initializer(1.0),
+                                     trainable=False)
+        if is_training:
+            # tf.nn.moments == Calculate the mean and the variance of the tensor x
+            avg, var = tf.nn.moments(x, range(len(shape)-1))
+            update_moving_avg = moving_averages.assign_moving_average(moving_avg, avg, decay)
+            update_moving_var = moving_averages.assign_moving_average(moving_var, var, decay)
+            control_inputs = [update_moving_avg, update_moving_var]
+        else:
+            avg = moving_avg
+            var = moving_var
+            control_inputs = []
+        with tf.control_dependencies(control_inputs):
+            output = tf.nn.batch_normalization(x, avg, var, offset=beta, scale=gamma, variance_epsilon=epsilon)
+
+    return output
 
 
 class Layer(object):
@@ -69,9 +133,7 @@ class BatchNormalizationLayer(Layer):
         self.input_shape = self.layer_input.get_shape().as_list()[1:]
         self.layer_size = self.input_shape
         with tf.name_scope(self.layer_name):
-            self.output = tf.contrib.layers.batch_norm(self.layer_input, center=True, scale=True,
-                                                       is_training=self.is_training, reuse=self.reuse,
-                                                       scope="bn_{}".format(self.layer_name))
+            self.output = batch_norm(self.layer_input, "bn_{}".format(self.layer_name), self.is_training)
             if self.save_summaries:
                 with tf.variable_scope("bn_{}".format(self.layer_name), reuse=True):
                     beta = tf.get_variable("beta", [self.layer_size[-1]])

@@ -52,9 +52,6 @@ class ConvolutionalLayer(Layer):
             if self.save_summaries:
                 variable_summaries(self.weights, "weights")
                 variable_summaries(self.bias, "biases")
-                tf.summary.image('convo_output',
-                                 tf.reshape(self.activated_output[0], self.output_shape[::-1] + [1]),
-                                 self.output_shape[-1])
                 tf.summary.histogram("activations", self.activated_output)
             return self.activated_output
 
