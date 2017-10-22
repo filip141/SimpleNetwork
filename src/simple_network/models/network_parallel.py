@@ -120,10 +120,13 @@ class NetworkParallel(SNModel):
         self.saver = tf.train.Saver()
 
     def train(self, train_iter, test_iter, train_step=100, test_step=100, epochs=1000, sample_per_epoch=1000,
-              summary_step=5, reshape_input=None, embedding_num=None, save_model=True):
+              summary_step=5, reshape_input=None, embedding_num=None, save_model=True, early_stop=None,
+              early_stop_lower=False):
         # Check Build model
         if not self.model_build:
             raise AttributeError("Model should be build before training it.")
+        if early_stop is None:
+            early_stop = {}
         self.train_writer.add_graph(self.sess.graph)
         self.test_writer.add_graph(self.sess.graph)
         # Train
@@ -173,6 +176,19 @@ class NetworkParallel(SNModel):
                     moving_avg_test = [x_it[-9:] + [train_met] for x_it, train_met in zip(moving_avg_test,
                                                                                           test_metrics_result)]
                     moving_avg_test_mean = [np.mean(x_it_n) for x_it_n in moving_avg_test]
+                    if early_stop:
+                        for metric_name, metric_score in zip(self.metric, moving_avg_test_mean):
+                            if not early_stop_lower:
+                                early_get = early_stop.get(metric_name, np.inf)
+                                if metric_score > early_get:
+                                    logger.info("Early stopping: Test metric score {}, "
+                                                "Expected score {} [{}]".format(metric_score, early_get, metric_name))
+                                    return
+                            else:
+                                if metric_score < -early_get:
+                                    logger.info("Early stopping: Test metric score {}, "
+                                                "Expected score {} [{}]".format(metric_score, early_get, metric_name))
+                                    return
                     test_metric_result_dict = dict(zip(self.metric, moving_avg_test_mean))
                     test_info_str = "Test set metrics: {}".format(", ".join(
                         [": ".join((tm_k.title(), str(tm_v))) for tm_k, tm_v in test_metric_result_dict.items()]))
