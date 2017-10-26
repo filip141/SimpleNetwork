@@ -2,10 +2,10 @@ import tensorflow as tf
 from simple_network.layers.layers import Layer
 
 
-class SplitterLayer(Layer):
+class ImageSplitterLayer(Layer):
 
     def __init__(self, name='splitter', ksize=160, summaries=True, reuse=None):
-        super(SplitterLayer, self).__init__("SplitterLayer", name, 'splitter', summaries, reuse)
+        super(ImageSplitterLayer, self).__init__("ImageSplitterLayer", name, 'image_splitter', summaries, reuse)
         # Define layer properties
         self.layer_input = None
         self.input_shape = None
@@ -34,4 +34,26 @@ class SplitterLayer(Layer):
                     tf.summary.image('split_im_{}'.format(path_idx), patch, 1)
             self.output = patches_list
             self.output_shape = patches_list[0].get_shape().as_list()
+        return self.output
+
+
+class SplitterLayer(Layer):
+
+    def __init__(self, name='splitter', num_split=2, summaries=True, reuse=None):
+        super(SplitterLayer, self).__init__("SplitterLayer", name, 'splitter', summaries, reuse)
+        # Define layer properties
+        self.layer_input = None
+        self.input_shape = None
+        self.output_shape = None
+        self.output = None
+        self.num_split = num_split
+        self.layer_size = None
+
+    def build_graph(self, layer_input):
+        self.layer_input = layer_input
+        self.input_shape = self.layer_input.get_shape().as_list()[1:]
+        self.layer_size = self.input_shape
+        with tf.variable_scope(self.layer_name):
+            self.output = tf.split(axis=3, num_or_size_splits=self.num_split, value=self.layer_input)
+            self.output_shape = self.output[0].get_shape().as_list()
         return self.output

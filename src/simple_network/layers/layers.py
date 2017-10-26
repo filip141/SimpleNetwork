@@ -145,6 +145,37 @@ class BatchNormalizationLayer(Layer):
         return self.output
 
 
+class LocalResponseNormalization(Layer):
+
+    def __init__(self, depth_radius=2, alpha=2e-05, beta=0.75, bias=1.0, name='batch_normalization',
+                 summaries=True, reuse=None):
+        super(LocalResponseNormalization, self).__init__("LocalResponseNormalization", name,
+                                                         'local_response_normalization', summaries, reuse)
+        # Define layer properties
+        self.layer_input = None
+        self.input_shape = None
+        self.output_shape = None
+        self.output = None
+        self.layer_size = None
+        self.depth_radius = depth_radius
+        self.alpha = alpha
+        self.beta = beta
+        self.bias = bias
+
+    def build_graph(self, layer_input):
+        self.layer_input = layer_input
+        self.input_shape = self.layer_input.get_shape().as_list()[1:]
+        self.layer_size = self.input_shape
+        with tf.name_scope(self.layer_name):
+            self.output = tf.nn.local_response_normalization(self.layer_input, depth_radius=self.depth_radius,
+                                                             alpha=self.alpha, beta=self.beta, bias=self.bias,
+                                                             name=self.layer_name)
+            if self.save_summaries:
+                self.output_shape = self.output.get_shape().as_list()[1:]
+                tf.summary.histogram("local_response_normalization", self.output)
+        return self.output
+
+
 def get_initializer_by_name(initializer_name, stddev=0.1):
     if initializer_name == "zeros":
         return tf.zeros_initializer()

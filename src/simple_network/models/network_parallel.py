@@ -64,6 +64,8 @@ class NetworkParallel(SNModel):
                             .format(node.layer_name, l_ll.layer_type, l_ll.input_shape, l_ll.output_shape))
             if reduce_output == 'mean':
                 output_val = tf.reduce_mean(tf.stack(outputs_list), axis=0)
+            elif reduce_output == "concat":
+                output_val = tf.concat(axis=3, values=outputs_list)
             else:
                 output_val = outputs_list
         return output_val
