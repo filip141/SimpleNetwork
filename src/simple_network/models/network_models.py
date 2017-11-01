@@ -10,10 +10,11 @@ logger = logging.getLogger(__name__)
 
 class NetworkModel(SNModel):
 
-    def __init__(self, input_size, summary_path=None, metric=None, input_summary=None):
+    def __init__(self, input_size, summary_path=None, metric=None, input_summary=None, input_placeholder=None,
+                 session=None):
         # If summary_path is None set tempdir
         self.model_build = False
-        super(NetworkModel, self).__init__(input_size, summary_path, metric, input_summary)
+        super(NetworkModel, self).__init__(input_size, summary_path, metric, input_summary, input_placeholder, session)
 
     def build_model(self, learning_rate):
         # Define input

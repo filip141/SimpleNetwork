@@ -4,7 +4,7 @@ from simple_network.layers.layers import Layer
 
 class ImageSplitterLayer(Layer):
 
-    def __init__(self, name='splitter', ksize=160, summaries=True, reuse=None):
+    def __init__(self, name='image_splitter', ksize=160, summaries=True, reuse=None):
         super(ImageSplitterLayer, self).__init__("ImageSplitterLayer", name, 'image_splitter', summaries, reuse)
         # Define layer properties
         self.layer_input = None
@@ -56,4 +56,24 @@ class SplitterLayer(Layer):
         with tf.variable_scope(self.layer_name):
             self.output = tf.split(axis=3, num_or_size_splits=self.num_split, value=self.layer_input)
             self.output_shape = self.output[0].get_shape().as_list()
+        return self.output
+
+
+class ReshapeLayer(Layer):
+
+    def __init__(self, output_shape, name='reshaper', summaries=True, reuse=None):
+        super(ReshapeLayer, self).__init__("ReshapeLayer", name, 'reshaper', summaries, reuse)
+        # Define layer properties
+        self.layer_input = None
+        self.input_shape = None
+        self.output_shape = output_shape
+        self.output = None
+        self.layer_size = None
+
+    def build_graph(self, layer_input):
+        self.layer_input = layer_input
+        self.input_shape = self.layer_input.get_shape().as_list()[1:]
+        self.layer_size = self.input_shape
+        with tf.variable_scope(self.layer_name):
+            self.output = tf.reshape(self.layer_input, [-1, ] + self.output_shape)
         return self.output

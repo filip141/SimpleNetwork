@@ -1,9 +1,14 @@
 import os
 import cv2
 import random
+import logging
 import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
+
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def variable_summaries(var, name):
@@ -83,3 +88,24 @@ def create_sprite_image(dataset_iterator, log_path, img_num):
 
     plt.imsave(img_temp_path, sprite_image)
     return img_temp_path, meta_temp_path, images, labels
+
+
+class Messenger(object):
+
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def text(message):
+        logger.info(message)
+
+    @staticmethod
+    def section_message(message):
+        logger.info(message)
+        logger.info("-" * 90)
+
+    @staticmethod
+    def title_message(message):
+        logger.info("=" * 90)
+        logger.info(message)
+        logger.info("=" * 90)

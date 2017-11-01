@@ -62,7 +62,7 @@ class ConvolutionalLayer(Layer):
 class DeconvolutionLayer(Layer):
 
     def __init__(self, l_size, stddev=0.1, activation='linear', stride=1, padding='same', initializer="xavier",
-                 summaries=True, name='convo_layer', reuse=None):
+                 output_shape=None, summaries=True, name='deconv_layer', reuse=None):
         super(DeconvolutionLayer, self).__init__("DeconvolutionLayer", name, 'deconv_layer', summaries, reuse)
         # Define variables
         self.weights = None
@@ -73,8 +73,8 @@ class DeconvolutionLayer(Layer):
         # Define layer properties
         self.layer_input = None
         self.input_shape = None
-        self.output_shape = None
         self.layer_size = l_size
+        self.output_shape = output_shape
 
         # initializer
         self.stddev = stddev
@@ -92,12 +92,15 @@ class DeconvolutionLayer(Layer):
         with tf.variable_scope(self.layer_name, reuse=self.reuse):
             # Define weights and biases
             self.weights = tf.get_variable("weights", [self.layer_size[0], self.layer_size[1],
-                                                       input_shape_filters, self.layer_size[2]],
+                                                       self.layer_size[2], input_shape_filters],
                                            initializer=get_initializer_by_name(self.initializer, stddev=self.stddev),
                                            dtype=tf.float32, trainable=True)
             self.bias = tf.get_variable("biases", [self.layer_size[2]], initializer=tf.constant_initializer(0.1),
                                         dtype=tf.float32, trainable=True)
-            self.not_activated = tf.nn.conv2d_transpose(self.layer_input, self.weights,
+            dyn_input_shape = tf.shape(self.layer_input)
+            batch_size = dyn_input_shape[0]
+            tf_output = tf.stack([batch_size, self.output_shape[0], self.output_shape[1], self.output_shape[2]])
+            self.not_activated = tf.nn.conv2d_transpose(self.layer_input, self.weights, tf_output,
                                                         strides=[1, self.stride, self.stride, 1],
                                                         padding=self.padding)
             self.not_activated = tf.nn.bias_add(self.not_activated, self.bias)
@@ -106,7 +109,6 @@ class DeconvolutionLayer(Layer):
             else:
                 self.activated_output = self.not_activated
             #  Get histograms
-            self.output_shape = self.activated_output.get_shape().as_list()[1:]
             if self.save_summaries:
                 variable_summaries(self.weights, "weights")
                 variable_summaries(self.bias, "biases")
@@ -146,6 +148,34 @@ class MaxPoolingLayer(Layer):
                 tf.summary.image('max_pool_output',
                                  tf.reshape(self.output[0], self.output_shape[::-1] + [1]), self.output_shape[-1])
                 tf.summary.histogram("max_pooling_histogram", self.output)
+            return self.output
+
+
+class GlobalAveragePoolingLayer(Layer):
+
+    def __init__(self, name='global_average_pooling', summaries=True, reuse=None):
+        super(GlobalAveragePoolingLayer, self).__init__("GlobalAveragePoolingLayer", name,
+                                                        'global_average_pooling', summaries, reuse)
+        # Define variables
+        self.weights = None
+        self.bias = None
+        self.not_activated = None
+        self.output = None
+
+        # Define layer properties
+        self.layer_input = None
+        self.input_shape = None
+        self.output_shape = None
+
+    def build_graph(self, layer_input):
+        self.layer_input = layer_input
+        self.input_shape = self.layer_input.get_shape().as_list()[1:]
+        with tf.variable_scope(self.layer_name):
+            self.output = tf.reduce_mean(self.layer_input, [1, 2])
+            #  Get histograms
+            self.output_shape = self.output.get_shape().as_list()[1:]
+            if self.save_summaries:
+                tf.summary.histogram("global_average_pooling_histogram", self.output)
             return self.output
 
 

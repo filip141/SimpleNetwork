@@ -8,6 +8,7 @@ from simple_network.tools.utils import create_sprite_image
 from simple_network.layers import BatchNormalizationLayer, DropoutLayer
 from simple_network.metrics import cross_entropy, accuracy, mean_square, mean_absolute, \
     mean_absolute_weighted_4
+from simple_network.train.losses import custom_loss
 from simple_network.train.losses import cross_entropy as cross_entropy_loss
 from simple_network.train.losses import mean_square as mean_square_loss
 from simple_network.train.losses import mean_absolute as mean_absolute_loss
@@ -49,7 +50,8 @@ class NetworkNode(object):
 
 class SNModel(object):
 
-    def __init__(self, input_size, summary_path=None, metric=None, input_summary=None):
+    def __init__(self, input_size, summary_path=None, metric=None, input_summary=None, input_placeholder=None,
+                 session=None):
         # If summary_path is None set tempdir
         if summary_path is None:
             self.summary_path = tempfile.gettempdir()
@@ -73,7 +75,7 @@ class SNModel(object):
         self.input_summary = input_summary
         self.layer_outputs = []
         self.last_layer_prediction = None
-        self.input_layer_placeholder = None
+        self.input_layer_placeholder = input_placeholder
         self.output_labels_placeholder = None
         self.is_training_placeholder = None
         self.optimizer = None
@@ -83,12 +85,15 @@ class SNModel(object):
         self.metric_list_func = []
         self.optimizer_func = None
         self.loss_func = None
-        self.sess = tf.Session()
         self.saver = None
         self.embedding_handler = None
         self.save_path = os.path.join(summary_path, "model")
         if not os.path.isdir(self.save_path):
             os.mkdir(self.save_path)
+        if session is None:
+            self.sess = tf.Session()
+        else:
+            self.sess = session
         self.train_writer = tf.summary.FileWriter(os.path.join(self.summary_path, "train"))
         self.test_writer = tf.summary.FileWriter(os.path.join(self.summary_path, "test"))
 
@@ -136,6 +141,8 @@ class SNModel(object):
             return mean_absolute_loss
         if self.loss == "mae_weight":
             return mean_absolute_weight_loss
+        if self.loss == "custom_loss":
+            return custom_loss
         else:
             raise AttributeError("Loss {} not defined.".format(self.loss))
 
@@ -173,7 +180,8 @@ class SNModel(object):
 
     def prepare_input(self):
         model_size = [None, ] + self.input_size
-        self.input_layer_placeholder = tf.placeholder(tf.float32, model_size, name='x')
+        if self.input_layer_placeholder is None:
+            self.input_layer_placeholder = tf.placeholder(tf.float32, model_size, name='x')
         # Save input summary
         if isinstance(self.input_summary, dict):
             summary_input_data = self.input_layer_placeholder

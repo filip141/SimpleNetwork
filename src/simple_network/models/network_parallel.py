@@ -12,10 +12,12 @@ logger = logging.getLogger(__name__)
 
 class NetworkParallel(SNModel):
 
-    def __init__(self, input_size, summary_path=None, metric=None, input_summary=None):
+    def __init__(self, input_size, summary_path=None, metric=None, input_summary=None, input_placeholder=None,
+                 session=None):
         # If summary_path is None set tempdir
         self.model_build = False
-        super(NetworkParallel, self).__init__(input_size, summary_path, metric, input_summary)
+        super(NetworkParallel, self).__init__(input_size, summary_path, metric, input_summary,
+                                              input_placeholder, session)
 
     def build_node(self, node, layer_input, layer_idx):
         n_layers = node.nodes_num()
@@ -40,7 +42,7 @@ class NetworkParallel(SNModel):
                 output_val = outputs_list
         return output_val
 
-    def build_model(self, learning_rate=0.01):
+    def build_model(self, learning_rate=0.01, out_placeholder=True):
         # Define input
         logger.info("-" * 90)
         with tf.name_scope("input_layer"):
@@ -61,13 +63,10 @@ class NetworkParallel(SNModel):
             layer_input = layer_output
         self.last_layer_prediction = layer_output
         # Output placeholder
-        self.output_labels_placeholder = tf.placeholder(tf.float32, [None, self.layers[-1].layer_size[-1]],
-                                                        name='labels')
-        y_labels = self.output_labels_placeholder
-
-        # Define loss and optimizer
-        init = tf.global_variables_initializer()
-        self.sess.run(init)
+        if out_placeholder:
+            self.output_labels_placeholder = tf.placeholder(tf.float32, [None, self.layers[-1].layer_size[-1]],
+                                                            name='labels')
+            y_labels = self.output_labels_placeholder
 
         loss_function = self.get_loss_by_name()
         if loss_function is not None:

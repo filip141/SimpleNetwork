@@ -147,7 +147,7 @@ class BatchNormalizationLayer(Layer):
 
 class LocalResponseNormalization(Layer):
 
-    def __init__(self, depth_radius=2, alpha=2e-05, beta=0.75, bias=1.0, name='batch_normalization',
+    def __init__(self, depth_radius=2, alpha=2e-05, beta=0.75, bias=1.0, name='local_response_normalization',
                  summaries=True, reuse=None):
         super(LocalResponseNormalization, self).__init__("LocalResponseNormalization", name,
                                                          'local_response_normalization', summaries, reuse)

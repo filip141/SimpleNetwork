@@ -58,3 +58,9 @@ def mean_absolute_weight(logits, labels, loss_data=None):
         tf.summary.scalar("mean_absolute_weight", loss)
     return loss
 
+
+def custom_loss(logits, labels, loss_data=None):
+    actual_loss = loss_data.get("loss_function", None)
+    if actual_loss is None:
+        raise AttributeError("Loss function note defined")
+    return actual_loss(logits, labels)
