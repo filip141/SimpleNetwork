@@ -1,4 +1,5 @@
 import os
+import copy
 import shutil
 import logging
 import tempfile
@@ -15,6 +16,35 @@ from simple_network.train.optimizers import adam_optimizer, momentum_optimizer, 
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+class NetworkNode(object):
+
+    def __init__(self, name="node_layer", reduce_output=None):
+        if reduce_output is None:
+            reduce_output = ""
+        self.layer_size = None
+        self.node_layers = []
+        self.layer_name = name
+        self.reduce_output = reduce_output
+
+    def add(self, layer):
+        self.node_layers.append(layer)
+
+    def nodes_num(self):
+        return len(self.node_layers)
+
+    def get_output_info(self):
+        return self.reduce_output.lower()
+
+    def add_many(self, layer, ntimes=1):
+        f_layer = copy.deepcopy(layer)
+        f_layer.reuse = False
+        self.add(f_layer)
+        for _ in range(1, ntimes):
+            n_layer = copy.deepcopy(layer)
+            n_layer.reuse = True
+            self.add(n_layer)
 
 
 class SNModel(object):
@@ -97,8 +127,7 @@ class SNModel(object):
     def get_loss_by_name(self):
         # Check loss
         if self.loss is None:
-            raise AttributeError("Loss function not set. Look into simple_network/train/losses to "
-                                 "find appropriate loss function.")
+            return None
         if self.loss == "cross_entropy":
             return cross_entropy_loss
         if self.loss == "mse":
@@ -113,8 +142,7 @@ class SNModel(object):
     def get_optimizer_by_name(self):
         # Check optimizer
         if self.optimizer is None:
-            raise AttributeError("Optimizer not set. Look into simple_network/train/losses to find appropriate o"
-                                 "optimizer.")
+            return None
         if self.optimizer == "Adam":
             return adam_optimizer
         elif self.optimizer == "Momentum":
@@ -177,3 +205,12 @@ class SNModel(object):
         embedding_config.sprite.single_image_dim.extend(img_res)
         tf.contrib.tensorboard.plugins.projector.visualize_embeddings(self.train_writer, config)
         return images, labels
+
+    def get_layer_by_name(self, layer_name):
+        for layer in self.layers:
+            if isinstance(layer, NetworkNode):
+                for d_layer in layer.node_layers:
+                    if d_layer.layer_name == layer_name:
+                        return d_layer
+            if layer.layer_name == layer_name:
+                return layer

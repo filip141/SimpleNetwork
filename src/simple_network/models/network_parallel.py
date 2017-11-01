@@ -1,43 +1,13 @@
 import os
 import time
-import copy
 import logging
 import numpy as np
 import tensorflow as tf
 from simple_network.layers.layers import Layer
-from simple_network.models.netmodel import SNModel
+from simple_network.models.netmodel import SNModel, NetworkNode
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-class NetworkNode(object):
-
-    def __init__(self, name="node_layer", reduce_output=None):
-        if reduce_output is None:
-            reduce_output = ""
-        self.layer_size = None
-        self.node_layers = []
-        self.layer_name = name
-        self.reduce_output = reduce_output
-
-    def add(self, layer):
-        self.node_layers.append(layer)
-
-    def nodes_num(self):
-        return len(self.node_layers)
-
-    def get_output_info(self):
-        return self.reduce_output.lower()
-
-    def add_many(self, layer, ntimes=1):
-        f_layer = copy.deepcopy(layer)
-        f_layer.reuse = False
-        self.add(f_layer)
-        for _ in range(1, ntimes):
-            n_layer = copy.deepcopy(layer)
-            n_layer.reuse = True
-            self.add(n_layer)
 
 
 class NetworkParallel(SNModel):
@@ -89,6 +59,7 @@ class NetworkParallel(SNModel):
                 raise AttributeError("Object not defined {}".format(type(layer)))
             self.layer_outputs.append(layer_output)
             layer_input = layer_output
+        self.last_layer_prediction = layer_output
         # Output placeholder
         self.output_labels_placeholder = tf.placeholder(tf.float32, [None, self.layers[-1].layer_size[-1]],
                                                         name='labels')
@@ -98,16 +69,16 @@ class NetworkParallel(SNModel):
         init = tf.global_variables_initializer()
         self.sess.run(init)
 
-        # Save layer output
-        self.last_layer_prediction = layer_output
-
-        self.loss_func = self.get_loss_by_name()(logits=layer_output, labels=y_labels, loss_data=self.loss_data)
-        logger.info("Loss function: {}".format(self.loss))
-        self.optimizer_func = self.get_optimizer_by_name()(self.loss_func, learning_rate, self.optimizer_data)
-        logger.info("Optimizer: {}".format(self.optimizer))
+        loss_function = self.get_loss_by_name()
+        if loss_function is not None:
+            self.loss_func = loss_function(logits=layer_output, labels=y_labels, loss_data=self.loss_data)
+            logger.info("Loss function: {}".format(self.loss))
+        optimizer_function = self.get_optimizer_by_name()
+        if optimizer_function is not None:
+            self.optimizer_func = optimizer_function(self.loss_func, learning_rate, self.optimizer_data)
+            logger.info("Optimizer: {}".format(self.optimizer))
 
         # Initialize metrics
-        self.last_layer_prediction = layer_output
         metric_list_func = self.get_metric_by_name()
         for metric_item in metric_list_func:
             self.metric_list_func.append(metric_item(logits=layer_output, labels=y_labels))

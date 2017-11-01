@@ -38,11 +38,69 @@ class ConvolutionalLayer(Layer):
             # Define weights and biases
             self.weights = tf.get_variable("weights", [self.layer_size[0], self.layer_size[1],
                                                        input_shape_filters, self.layer_size[2]],
-                                           initializer=get_initializer_by_name(self.initializer, stddev=self.stddev))
-            self.bias = tf.get_variable("biases", [self.layer_size[2]], initializer=tf.constant_initializer(0.1))
+                                           initializer=get_initializer_by_name(self.initializer, stddev=self.stddev),
+                                           dtype=tf.float32, trainable=True)
+            self.bias = tf.get_variable("biases", [self.layer_size[2]], initializer=tf.constant_initializer(0.1),
+                                        dtype=tf.float32, trainable=True)
             self.not_activated = tf.nn.conv2d(self.layer_input, self.weights,
                                               strides=[1, self.stride, self.stride, 1],
-                                              padding=self.padding) + self.bias
+                                              padding=self.padding)
+            self.not_activated = tf.nn.bias_add(self.not_activated, self.bias)
+            if self.activation != 'linear':
+                self.activated_output = getattr(tf.nn, self.activation)(self.not_activated)
+            else:
+                self.activated_output = self.not_activated
+            #  Get histograms
+            self.output_shape = self.activated_output.get_shape().as_list()[1:]
+            if self.save_summaries:
+                variable_summaries(self.weights, "weights")
+                variable_summaries(self.bias, "biases")
+                tf.summary.histogram("activations", self.activated_output)
+            return self.activated_output
+
+
+class DeconvolutionLayer(Layer):
+
+    def __init__(self, l_size, stddev=0.1, activation='linear', stride=1, padding='same', initializer="xavier",
+                 summaries=True, name='convo_layer', reuse=None):
+        super(DeconvolutionLayer, self).__init__("DeconvolutionLayer", name, 'deconv_layer', summaries, reuse)
+        # Define variables
+        self.weights = None
+        self.bias = None
+        self.not_activated = None
+        self.activated_output = None
+
+        # Define layer properties
+        self.layer_input = None
+        self.input_shape = None
+        self.output_shape = None
+        self.layer_size = l_size
+
+        # initializer
+        self.stddev = stddev
+        self.initializer = initializer
+
+        # Boarders
+        self.stride = stride
+        self.padding = padding.upper()
+        self.activation = activation
+
+    def build_graph(self, layer_input):
+        self.layer_input = layer_input
+        self.input_shape = self.layer_input.get_shape().as_list()[1:]
+        input_shape_filters = self.input_shape[-1]
+        with tf.variable_scope(self.layer_name, reuse=self.reuse):
+            # Define weights and biases
+            self.weights = tf.get_variable("weights", [self.layer_size[0], self.layer_size[1],
+                                                       input_shape_filters, self.layer_size[2]],
+                                           initializer=get_initializer_by_name(self.initializer, stddev=self.stddev),
+                                           dtype=tf.float32, trainable=True)
+            self.bias = tf.get_variable("biases", [self.layer_size[2]], initializer=tf.constant_initializer(0.1),
+                                        dtype=tf.float32, trainable=True)
+            self.not_activated = tf.nn.conv2d_transpose(self.layer_input, self.weights,
+                                                        strides=[1, self.stride, self.stride, 1],
+                                                        padding=self.padding)
+            self.not_activated = tf.nn.bias_add(self.not_activated, self.bias)
             if self.activation != 'linear':
                 self.activated_output = getattr(tf.nn, self.activation)(self.not_activated)
             else:
