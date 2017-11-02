@@ -10,13 +10,12 @@ from simple_network.models.network_parallel import NetworkParallel
 class GANScheme(object):
     __metaclass__ = ABCMeta
 
-    def __init__(self, generator_input_size, discriminator_input_size, output_size, log_path):
+    def __init__(self, generator_input_size, discriminator_input_size, log_path):
         self.input_summary = {"img_number": 30}
         self.generator_input_size = generator_input_size
         self.discriminator_input_size = discriminator_input_size
         self.generator_learning_rate = None
         self.discriminator_learning_rate = None
-        self.output_size = output_size
         self.session = tf.Session()
 
         # Define paths
@@ -64,7 +63,7 @@ class GANScheme(object):
             tf.summary.scalar("Discriminator_loss", red_mean_overall)
         return red_mean_overall
 
-    def build_model(self, generator_learning_rate, discriminator_learning_rate):
+    def build_model(self, discriminator_learning_rate, generator_learning_rate):
         # Build generator layers
         with tf.variable_scope("generator"):
             self.build_generator(self.generator)
@@ -150,11 +149,13 @@ class GANScheme(object):
                 dsc_train_data = {self.discriminator.input_layer_placeholder: batch_x,
                                   self.generator.input_layer_placeholder: vec_ref,
                                   self.discriminator.is_training_placeholder: True,
-                                  self.generator.is_training_placeholder: False}
+                                  self.generator.is_training_placeholder: False,
+                                  self.discriminator_fake.is_training_placeholder: True}
                 gen_train_data = {self.discriminator.input_layer_placeholder: batch_x,
                                   self.generator.input_layer_placeholder: vec_ref,
                                   self.discriminator.is_training_placeholder: False,
-                                  self.generator.is_training_placeholder: True}
+                                  self.generator.is_training_placeholder: True,
+                                  self.discriminator_fake.is_training_placeholder: False}
 
                 # Train
                 self.session.run(self.discriminator.optimizer_func, feed_dict=dsc_train_data)
