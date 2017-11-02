@@ -61,6 +61,8 @@ class GANScheme(object):
             red_mean_2 = tf.reduce_mean(loss_2)
             red_mean_overall = red_mean_1 + red_mean_2
             tf.summary.scalar("Discriminator_loss", red_mean_overall)
+            tf.summary.scalar("Discriminator_loss_real", red_mean_2)
+            tf.summary.scalar("Discriminator_loss_fake", red_mean_1)
         return red_mean_overall
 
     def build_model(self, discriminator_learning_rate, generator_learning_rate):
