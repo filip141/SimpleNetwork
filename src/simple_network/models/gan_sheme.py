@@ -156,14 +156,19 @@ class GANScheme(object):
                                   self.discriminator.is_training_placeholder: False,
                                   self.generator.is_training_placeholder: True,
                                   self.discriminator_fake.is_training_placeholder: False}
+                test_train_data = {self.discriminator.input_layer_placeholder: batch_x,
+                                   self.generator.input_layer_placeholder: vec_ref,
+                                   self.discriminator.is_training_placeholder: False,
+                                   self.generator.is_training_placeholder: False,
+                                   self.discriminator_fake.is_training_placeholder: False}
 
                 # Train
                 self.session.run(self.discriminator.optimizer_func, feed_dict=dsc_train_data)
                 if sample_iter % generator_steps == 0:
                     self.session.run(self.generator.optimizer_func, feed_dict=gen_train_data)
 
-                err_generator = self.session.run(generator_loss, feed_dict=gen_train_data)
-                err_discriminator = self.session.run(discriminator_loss, feed_dict=dsc_train_data)
+                err_generator = self.session.run(generator_loss, feed_dict=test_train_data)
+                err_discriminator = self.session.run(discriminator_loss, feed_dict=test_train_data)
                 gen_moving_avg_train = gen_moving_avg_train[-9:] + [err_generator]
                 dsc_moving_avg_train = dsc_moving_avg_train[-9:] + [err_discriminator]
                 train_info_str = "Discriminator loss: {} | Generator loss: {} | Sample number: {} | Time: {}"\
@@ -174,8 +179,8 @@ class GANScheme(object):
 
                 # Save summary
                 if sample_iter % summary_step == 0:
-                    sum_res_discriminator = self.session.run(merged_summary, dsc_train_data)
-                    sum_res_generator = self.session.run(merged_summary, gen_train_data)
+                    sum_res_discriminator = self.session.run(merged_summary, test_train_data)
+                    sum_res_generator = self.session.run(merged_summary, test_train_data)
                     self.discriminator.train_writer.add_summary(
                         sum_res_discriminator, epoch_idx * sample_per_epoch + sample_iter)
                     self.generator.train_writer.add_summary(
