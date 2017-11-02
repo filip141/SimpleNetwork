@@ -80,10 +80,14 @@ class GANScheme(object):
             self.build_discriminator(self.discriminator)
             self.build_discriminator(self.discriminator_fake)
             Messenger.title_message("Building Discriminator Network")
-            self.discriminator.build_model(discriminator_learning_rate, out_placeholder=False)
+            # build real discriminator
+            with tf.name_scope("discriminator_real"):
+                self.discriminator.build_model(discriminator_learning_rate, out_placeholder=False)
             tf.get_variable_scope().reuse_variables()
             Messenger.title_message("Building Discriminator Fake Network")
-            self.discriminator_fake.build_model(discriminator_learning_rate, out_placeholder=False)
+            # Build fake discriminator
+            with tf.name_scope("discriminator_fake"):
+                self.discriminator_fake.build_model(discriminator_learning_rate, out_placeholder=False)
         self.generator_learning_rate = generator_learning_rate
         self.discriminator_learning_rate = discriminator_learning_rate
 
