@@ -151,7 +151,7 @@ class GANScheme(object):
                 if reshape_input is not None:
                     batch_x = batch_x.reshape([train_step, ] + reshape_input)
 
-                vec_ref = np.random.normal(size=[train_step, ] + self.generator.input_size)
+                vec_ref = np.random.uniform(-1., 1., size=[train_step, ] + self.generator.input_size)
                 dsc_train_data = {self.discriminator.input_layer_placeholder: batch_x,
                                   self.generator.input_layer_placeholder: vec_ref,
                                   self.discriminator.is_training_placeholder: True,
