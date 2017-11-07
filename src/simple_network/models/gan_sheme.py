@@ -91,8 +91,8 @@ class GANScheme(object):
         self.generator_learning_rate = generator_learning_rate
         self.discriminator_learning_rate = discriminator_learning_rate
 
-    def train(self, train_iter, generator_steps=10, train_step=100, epochs=1000, sample_per_epoch=1000,
-              summary_step=5, reshape_input=None, save_model=True):
+    def train(self, train_iter, generator_steps=1, discriminator_steps=1, train_step=100, epochs=1000,
+              sample_per_epoch=1000, summary_step=5, reshape_input=None, save_model=True):
         # Check Build model
         if not self.discriminator.model_build:
             raise AttributeError("Discriminator Model should be build before training it.")
@@ -156,7 +156,8 @@ class GANScheme(object):
                                   self.generator.is_training_placeholder: True,
                                   self.discriminator_fake.is_training_placeholder: True}
                 # Train
-                self.session.run(self.discriminator.optimizer_func, feed_dict=dsc_train_data)
+                if sample_iter % discriminator_steps == 0:
+                    self.session.run(self.discriminator.optimizer_func, feed_dict=dsc_train_data)
                 if sample_iter % generator_steps == 0:
                     self.session.run(self.generator.optimizer_func, feed_dict=dsc_train_data)
 
