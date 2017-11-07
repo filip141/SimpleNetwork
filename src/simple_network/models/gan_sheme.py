@@ -11,7 +11,7 @@ class GANScheme(object):
     __metaclass__ = ABCMeta
 
     def __init__(self, generator_input_size, discriminator_input_size, log_path):
-        self.input_summary = {"img_number": 30}
+        self.input_summary = {"img_number": 5}
         self.generator_input_size = generator_input_size
         self.discriminator_input_size = discriminator_input_size
         self.generator_learning_rate = None
@@ -107,21 +107,19 @@ class GANScheme(object):
                                                      real_image, tf.ones_like(real_image))
 
         # Used trick acquired from github page
-        g_vars = [var for var in tf.trainable_variables() if "discriminator" in var.name]
-        d_vars = [var for var in tf.trainable_variables() if "generator" in var.name]
+        d_vars = [var for var in tf.trainable_variables() if "discriminator" in var.name]
+        g_vars = [var for var in tf.trainable_variables() if "generator" in var.name]
 
-        # Define optimizers Generator
-        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-        optimizer_generator = tf.train.AdamOptimizer(self.generator_learning_rate, beta1=0.5)
-        with tf.control_dependencies(update_ops):
-            optimizer_generator = optimizer_generator.minimize(generator_loss, var_list=g_vars)
+        # Define optimizers Generator and Discriminator
+        with tf.name_scope("train"):
+            update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+            optimizer_generator = tf.train.AdamOptimizer(self.generator_learning_rate)
+            optimizer_discriminator = tf.train.AdamOptimizer(self.discriminator_learning_rate)
+            with tf.control_dependencies(update_ops):
+                optimizer_generator = optimizer_generator.minimize(generator_loss, var_list=g_vars)
+                optimizer_discriminator = optimizer_discriminator.minimize(discriminator_loss, var_list=d_vars)
 
-        # Define optimizers Discriminator
-        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-        optimizer_discriminator = tf.train.AdamOptimizer(self.discriminator_learning_rate, beta1=0.5)
-        with tf.control_dependencies(update_ops):
-            optimizer_discriminator = optimizer_discriminator.minimize(discriminator_loss, var_list=d_vars)
-
+        # Save optimizer functions
         self.discriminator.optimizer_func = optimizer_discriminator
         self.generator.optimizer_func = optimizer_generator
 
@@ -155,26 +153,15 @@ class GANScheme(object):
                 dsc_train_data = {self.discriminator.input_layer_placeholder: batch_x,
                                   self.generator.input_layer_placeholder: vec_ref,
                                   self.discriminator.is_training_placeholder: True,
-                                  self.generator.is_training_placeholder: False,
-                                  self.discriminator_fake.is_training_placeholder: True}
-                gen_train_data = {self.discriminator.input_layer_placeholder: batch_x,
-                                  self.generator.input_layer_placeholder: vec_ref,
-                                  self.discriminator.is_training_placeholder: False,
                                   self.generator.is_training_placeholder: True,
-                                  self.discriminator_fake.is_training_placeholder: False}
-                test_train_data = {self.discriminator.input_layer_placeholder: batch_x,
-                                   self.generator.input_layer_placeholder: vec_ref,
-                                   self.discriminator.is_training_placeholder: False,
-                                   self.generator.is_training_placeholder: False,
-                                   self.discriminator_fake.is_training_placeholder: False}
-
+                                  self.discriminator_fake.is_training_placeholder: True}
                 # Train
                 self.session.run(self.discriminator.optimizer_func, feed_dict=dsc_train_data)
                 if sample_iter % generator_steps == 0:
-                    self.session.run(self.generator.optimizer_func, feed_dict=gen_train_data)
+                    self.session.run(self.generator.optimizer_func, feed_dict=dsc_train_data)
 
-                err_generator = self.session.run(generator_loss, feed_dict=test_train_data)
-                err_discriminator = self.session.run(discriminator_loss, feed_dict=test_train_data)
+                err_generator = self.session.run(generator_loss, feed_dict=dsc_train_data)
+                err_discriminator = self.session.run(discriminator_loss, feed_dict=dsc_train_data)
                 gen_moving_avg_train = gen_moving_avg_train[-9:] + [err_generator]
                 dsc_moving_avg_train = dsc_moving_avg_train[-9:] + [err_discriminator]
                 train_info_str = "Discriminator loss: {} | Generator loss: {} | Sample number: {} | Time: {}"\
@@ -185,8 +172,8 @@ class GANScheme(object):
 
                 # Save summary
                 if sample_iter % summary_step == 0:
-                    sum_res_discriminator = self.session.run(merged_summary, test_train_data)
-                    sum_res_generator = self.session.run(merged_summary, test_train_data)
+                    sum_res_discriminator = self.session.run(merged_summary, dsc_train_data)
+                    sum_res_generator = self.session.run(merged_summary, dsc_train_data)
                     self.discriminator.train_writer.add_summary(
                         sum_res_discriminator, epoch_idx * sample_per_epoch + sample_iter)
                     self.generator.train_writer.add_summary(

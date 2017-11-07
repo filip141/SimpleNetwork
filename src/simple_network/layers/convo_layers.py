@@ -61,8 +61,8 @@ class ConvolutionalLayer(Layer):
 
 class DeconvolutionLayer(Layer):
 
-    def __init__(self, l_size, stddev=0.1, activation='linear', stride=1, padding='same', initializer="xavier",
-                 output_shape=None, summaries=True, name='deconv_layer', reuse=None):
+    def __init__(self, l_size, stddev=0.1, activation='linear', stride=1, batch_size=None, padding='same',
+                 initializer="xavier", output_shape=None, summaries=True, name='deconv_layer', reuse=None):
         super(DeconvolutionLayer, self).__init__("DeconvolutionLayer", name, 'deconv_layer', summaries, reuse)
         # Define variables
         self.weights = None
@@ -71,6 +71,7 @@ class DeconvolutionLayer(Layer):
         self.activated_output = None
 
         # Define layer properties
+        self.batch_size = batch_size
         self.layer_input = None
         self.input_shape = None
         self.layer_size = l_size
@@ -98,8 +99,9 @@ class DeconvolutionLayer(Layer):
             self.bias = tf.get_variable("biases", [self.layer_size[2]], initializer=tf.constant_initializer(0.1),
                                         dtype=tf.float32, trainable=True)
             dyn_input_shape = tf.shape(self.layer_input)
-            batch_size = dyn_input_shape[0]
-            tf_output = tf.stack([batch_size, self.output_shape[0], self.output_shape[1], self.output_shape[2]])
+            if not isinstance(self.batch_size, int):
+                self.batch_size = dyn_input_shape[0]
+            tf_output = tf.stack([self.batch_size, self.output_shape[0], self.output_shape[1], self.output_shape[2]])
             self.not_activated = tf.nn.conv2d_transpose(self.layer_input, self.weights, tf_output,
                                                         strides=[1, self.stride, self.stride, 1],
                                                         padding=self.padding)

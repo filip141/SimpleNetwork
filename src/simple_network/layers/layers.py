@@ -18,7 +18,6 @@ def batch_norm(x, scope, is_training, epsilon=0.001, decay=0.99):
     Returns:
         The correct batch normalization layer based on the value of is_training
     """
-
     return tf.cond(
         is_training,
         lambda: batch_norm_layer(x=x, scope=scope, epsilon=epsilon, decay=decay, is_training=True, reuse=None),

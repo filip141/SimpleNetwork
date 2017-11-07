@@ -89,3 +89,47 @@ class TanhLayer(Layer):
             self.output_shape = self.output.get_shape().as_list()[1:]
             tf.summary.histogram("tanh_activation", self.output)
         return self.output
+
+
+class SigmoidLayer(Layer):
+
+    def __init__(self, name='sigmoid', summaries=True, reuse=None):
+        super(SigmoidLayer, self).__init__("SigmoidLayer", name, 'sigmoid', summaries, reuse)
+        # Define layer properties
+        self.layer_input = None
+        self.input_shape = None
+        self.output_shape = None
+        self.output = None
+        self.layer_size = None
+
+    def build_graph(self, layer_input):
+        self.layer_input = layer_input
+        self.input_shape = self.layer_input.get_shape().as_list()[1:]
+        self.layer_size = self.input_shape
+        with tf.variable_scope(self.layer_name):
+            self.output = tf.nn.sigmoid(self.layer_input, name="sigmoid_activation")
+            self.output_shape = self.output.get_shape().as_list()[1:]
+            tf.summary.histogram("sigmoid_activation", self.output)
+        return self.output
+
+
+class LinearLayer(Layer):
+
+    def __init__(self, name='linear', summaries=True, reuse=None):
+        super(LinearLayer, self).__init__("LinearLayer", name, 'linear', summaries, reuse)
+        # Define layer properties
+        self.layer_input = None
+        self.input_shape = None
+        self.output_shape = None
+        self.output = None
+        self.layer_size = None
+
+    def build_graph(self, layer_input):
+        self.layer_input = layer_input
+        self.input_shape = self.layer_input.get_shape().as_list()[1:]
+        self.layer_size = self.input_shape
+        with tf.variable_scope(self.layer_name):
+            self.output = self.layer_input
+            self.output_shape = self.output.get_shape().as_list()[1:]
+            tf.summary.histogram("linear_activation", self.output)
+        return self.output
