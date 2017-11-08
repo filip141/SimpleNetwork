@@ -7,7 +7,7 @@ import tensorflow as tf
 from simple_network.tools.utils import create_sprite_image
 from simple_network.layers import BatchNormalizationLayer, DropoutLayer
 from simple_network.metrics import cross_entropy, accuracy, mean_square, mean_absolute, \
-    mean_absolute_weighted_4
+    mean_absolute_weighted_4, cross_entropy_sigmoid, binary_accuracy
 from simple_network.train.losses import custom_loss
 from simple_network.train.losses import cross_entropy as cross_entropy_loss
 from simple_network.train.losses import mean_square as mean_square_loss
@@ -159,15 +159,19 @@ class SNModel(object):
         elif self.optimizer == "SGD":
             return sgd_optimizer
         else:
-            raise AttributeError("Optimizer {} not defined.".format(self.loss))
+            raise AttributeError("Optimizer {} not defined.".format(self.optimizer))
 
     def get_metric_by_name(self):
         metric_list = []
         for metric_item in self.metric:
             if metric_item == "accuracy":
                 metric_list.append(accuracy)
+            elif metric_item == "binary_accuracy":
+                metric_list.append(binary_accuracy)
             elif metric_item == "cross_entropy":
                 metric_list.append(cross_entropy)
+            elif metric_item == "cross_entropy_sigmoid":
+                metric_list.append(cross_entropy_sigmoid)
             elif metric_item == "mse":
                 metric_list.append(mean_square)
             elif metric_item == "mae":
@@ -175,7 +179,7 @@ class SNModel(object):
             elif metric_item == "mae_weighted_4":
                 metric_list.append(mean_absolute_weighted_4)
             else:
-                raise AttributeError("Metric {} not defined.".format(self.loss))
+                raise AttributeError("Metric {} not defined.".format(metric_item))
         return metric_list
 
     def prepare_input(self):

@@ -9,12 +9,24 @@ def cross_entropy(logits, labels):
     return cross_ent(logits=logits, labels=labels)
 
 
+def cross_entropy_sigmoid(logits, labels):
+    return cross_ent(logits=logits, labels=labels, loss_data={"activation": "sigmoid"})
+
+
 def accuracy(logits, labels):
     with tf.name_scope('accuracy'):
         is_correct = tf.equal(tf.argmax(logits, 1), tf.argmax(labels, 1))
         accuracy_val = tf.reduce_mean(tf.cast(is_correct, tf.float32))
         tf.summary.scalar("accuracy", accuracy_val)
     return accuracy_val
+
+
+def binary_accuracy(logits, labels):
+    predicted_class = tf.greater(logits, 0.5)
+    correct = tf.equal(predicted_class, tf.equal(labels,1.0))
+    accuracy_bin = tf.reduce_mean(tf.cast(correct, 'float'))
+    tf.summary.scalar("binary_accuracy", accuracy_bin)
+    return accuracy_bin
 
 
 def mean_square(logits, labels):
