@@ -3,7 +3,7 @@ import time
 import numpy as np
 import tensorflow as tf
 from abc import ABCMeta, abstractmethod
-from simple_network.tools.utils import Messenger
+from simple_network.tools.utils import Messenger, ModelLogger
 from simple_network.models.network_parallel import NetworkParallel
 from simple_network.train.optimizers import adam_optimizer, momentum_optimizer, rmsprop_optimizer, sgd_optimizer
 
@@ -26,9 +26,13 @@ class GANScheme(object):
         self.session = tf.Session()
 
         # Define paths and create them if not exist
+        self.log_path = log_path
         if not os.path.isdir(log_path):
             os.mkdir(log_path)
-        self.log_path = log_path
+        self.model_gan_path = os.path.join(log_path, "info")
+        if not os.path.isdir(self.model_gan_path):
+            os.mkdir(self.model_gan_path)
+
         generator_path = os.path.join(log_path, "generator")
         self.generator_path = generator_path
         if not os.path.isdir(generator_path):
@@ -74,6 +78,35 @@ class GANScheme(object):
             tf.summary.scalar("Discriminator_loss_real", red_mean_2)
             tf.summary.scalar("Discriminator_loss_fake", red_mean_1)
         return red_mean_overall
+
+    def save_model_info(self):
+        model_logger = ModelLogger(self.model_gan_path)
+        model_logger.title("Discriminator")
+        model_logger.add_property("Discriminator Input", self.discriminator_input_size)
+        model_logger.add_to_json("discriminator_input", self.discriminator_input_size)
+
+        model_logger.add_property("Discriminator Optimizer", self.discriminator_optimizer)
+        model_logger.add_to_json("discriminator_optimizer", self.discriminator_optimizer)
+
+        model_logger.add_property("Discriminator Learning Rate", self.discriminator_learning_rate)
+        model_logger.add_to_json("learning_rate", self.discriminator_learning_rate)
+
+        model_logger.add_property("Discriminator Path", self.discriminator_path)
+        model_logger.add_to_json("discriminator_path", self.discriminator_path)
+
+        model_logger.title("Generator")
+        model_logger.add_property("Generator Input", self.generator_input_size)
+        model_logger.add_to_json("generator_input", self.generator_input_size)
+
+        model_logger.add_property("Generator Optimizer", self.generator_optimizer)
+        model_logger.add_to_json("generator_optimizer", self.generator_optimizer)
+
+        model_logger.add_property("Generator Learning Rate", self.generator_learning_rate)
+        model_logger.add_to_json("learning_rate", self.generator_learning_rate)
+
+        model_logger.add_property("Generator Path", self.generator_path)
+        model_logger.add_to_json("discriminator_path", self.generator_path)
+        model_logger.save()
 
     def model_compile(self, discriminator_learning_rate, generator_learning_rate):
         # Build generator layers
@@ -129,6 +162,7 @@ class GANScheme(object):
             self.discriminator.restore()
             self.discriminator_fake.restore()
             self.generator.restore()
+            Messenger.text("Model successful restored.")
         except Exception:
             Messenger.text("No restore points in {}".format(self.log_path))
 
@@ -139,6 +173,7 @@ class GANScheme(object):
             raise AttributeError("Discriminator Model should be build before training it.")
         if not self.generator.model_build:
             raise AttributeError("Generator Model should be build before training it.")
+        self.save_model_info()
 
         # Create losses for both networks
         fake_image = self.discriminator_fake.layer_outputs[-1]

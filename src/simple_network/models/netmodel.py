@@ -1,5 +1,6 @@
 import os
 import copy
+import time
 import logging
 import tempfile
 import tensorflow as tf
@@ -55,7 +56,8 @@ class SNModel(object):
         # If summary_path is None set tempdir
         if summary_path is None:
             self.summary_path = tempfile.gettempdir()
-        self.summary_path = os.path.join(summary_path, "logs")
+        current_time_str = time.strftime("%Y%m%d%H%M%S")
+        self.summary_path = os.path.join(summary_path, "logs_{}".format(current_time_str))
         self.model_info_path = os.path.join(summary_path, "info")
         if not os.path.isdir(self.summary_path):
             os.mkdir(self.summary_path)
