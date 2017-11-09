@@ -1,5 +1,7 @@
 import os
+import sys
 import cv2
+import json
 import random
 import logging
 import tensorflow as tf
@@ -105,7 +107,45 @@ class Messenger(object):
         logger.info("-" * 90)
 
     @staticmethod
+    def fancy_message(message):
+        number_of_letters = len(message)
+        side_ms = int((90 - number_of_letters) / 2.0)
+        logger.info("=" * 90)
+        logger.info(side_ms * '=' + " " + message + " " + side_ms * '=')
+        logger.info("=" * 90)
+
+    @staticmethod
     def title_message(message):
         logger.info("=" * 90)
         logger.info(message)
         logger.info("=" * 90)
+
+
+class ModelLogger(object):
+
+    def __init__(self, info_path):
+        # Define paths
+        prefix = os.path.basename(sys.argv[0])
+        self.file_path_readable = os.path.join(info_path, "{}_model_info.txt".format(prefix[:-3]))
+        self.file_path_json = os.path.join(info_path, "{}_model_info.json".format(prefix[:-3]))
+
+        # Define files descriptor
+        self.readable_file = open(self.file_path_readable, 'w')
+        self.json_dict = {}
+
+    def title(self, text):
+        self.readable_file.write(35 * "=" + "{}".format(text.upper()) + 35 * "=" + "\n")
+
+    def add_property(self, text, value):
+        self.readable_file.write("{}: {}\n".format(text, value))
+
+    def info(self, text):
+        self.readable_file.write("{}\n".format(text))
+
+    def add_to_json(self, key, value):
+        self.json_dict[key] = value
+
+    def save(self):
+        with open(self.file_path_json, 'w') as outfile:
+            json.dump(self.json_dict, outfile)
+        self.readable_file.close()

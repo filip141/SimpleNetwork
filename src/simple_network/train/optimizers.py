@@ -1,7 +1,16 @@
 import tensorflow as tf
 
 
-def adam_optimizer(loss, learning_rate, optimizer_data, name=""):
+def optimizer_minimize(optimizer, loss, var_list):
+    # Define for var_list
+    if isinstance(var_list, list):
+        train_step = optimizer.minimize(loss, var_list=var_list)
+    else:
+        train_step = optimizer.minimize(loss)
+    return train_step
+
+
+def adam_optimizer(loss, learning_rate, optimizer_data, var_list=None, name=""):
     # Define name
     if name:
         train_name = "train_{}".format(name)
@@ -15,11 +24,11 @@ def adam_optimizer(loss, learning_rate, optimizer_data, name=""):
         optimizer = tf.train.AdamOptimizer(learning_rate, beta_1, beta_2, epsilon)
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(update_ops):
-            train_step = optimizer.minimize(loss)
+            train_step = optimizer_minimize(optimizer=optimizer, loss=loss, var_list=var_list)
     return train_step
 
 
-def momentum_optimizer(loss, learning_rate, optimizer_data, name=""):
+def momentum_optimizer(loss, learning_rate, optimizer_data, var_list=None, name=""):
         # Define name
     if name:
         train_name = "train_{}".format(name)
@@ -34,11 +43,11 @@ def momentum_optimizer(loss, learning_rate, optimizer_data, name=""):
                                                use_nesterov=use_nesterov)
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(update_ops):
-            train_step = optimizer.minimize(loss)
+            train_step = optimizer_minimize(optimizer=optimizer, loss=loss, var_list=var_list)
     return train_step
 
 
-def rmsprop_optimizer(loss, learning_rate, optimizer_data, name=""):
+def rmsprop_optimizer(loss, learning_rate, optimizer_data, var_list=None, name=""):
     # Define name
     if name:
         train_name = "train_{}".format(name)
@@ -54,11 +63,11 @@ def rmsprop_optimizer(loss, learning_rate, optimizer_data, name=""):
                                               epsilon=epsilon, use_locking=use_locking)
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(update_ops):
-            train_step = optimizer.minimize(loss)
+            train_step = optimizer_minimize(optimizer=optimizer, loss=loss, var_list=var_list)
     return train_step
 
 
-def sgd_optimizer(loss, learning_rate, optimizer_data, name=""):
+def sgd_optimizer(loss, learning_rate, optimizer_data, var_list=None, name=""):
     # Define name
     if name:
         train_name = "train_{}".format(name)
@@ -70,5 +79,5 @@ def sgd_optimizer(loss, learning_rate, optimizer_data, name=""):
         optimizer = tf.train.GradientDescentOptimizer(learning_rate, use_locking=use_locking)
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(update_ops):
-            train_step = optimizer.minimize(loss)
+            train_step = optimizer_minimize(optimizer=optimizer, loss=loss, var_list=var_list)
     return train_step

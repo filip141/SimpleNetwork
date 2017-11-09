@@ -56,6 +56,7 @@ class NetworkModel(SNModel):
         # Initialize saver for future saving weights
         self.model_build = True
         self.saver = tf.train.Saver()
+        self.save_model_info()
 
     def train(self, train_iter, test_iter, train_step=100, test_step=100, epochs=1000, sample_per_epoch=1000,
               summary_step=5, reshape_input=None, save_model=True):

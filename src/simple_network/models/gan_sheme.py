@@ -5,6 +5,7 @@ import tensorflow as tf
 from abc import ABCMeta, abstractmethod
 from simple_network.tools.utils import Messenger
 from simple_network.models.network_parallel import NetworkParallel
+from simple_network.train.optimizers import adam_optimizer, momentum_optimizer, rmsprop_optimizer, sgd_optimizer
 
 
 class GANScheme(object):
@@ -14,11 +15,20 @@ class GANScheme(object):
         self.input_summary = {"img_number": 5}
         self.generator_input_size = generator_input_size
         self.discriminator_input_size = discriminator_input_size
+
+        self.generator_optimizer = "Adam"
+        self.generator_optimizer_data = None
+        self.discriminator_optimizer = "Adam"
+        self.discriminator_optimizer_data = None
+
         self.generator_learning_rate = None
         self.discriminator_learning_rate = None
         self.session = tf.Session()
 
-        # Define paths
+        # Define paths and create them if not exist
+        if not os.path.isdir(log_path):
+            os.mkdir(log_path)
+        self.log_path = log_path
         generator_path = os.path.join(log_path, "generator")
         self.generator_path = generator_path
         if not os.path.isdir(generator_path):
@@ -65,7 +75,7 @@ class GANScheme(object):
             tf.summary.scalar("Discriminator_loss_fake", red_mean_1)
         return red_mean_overall
 
-    def build_model(self, discriminator_learning_rate, generator_learning_rate):
+    def model_compile(self, discriminator_learning_rate, generator_learning_rate):
         # Build generator layers
         with tf.variable_scope("generator"):
             self.build_generator(self.generator)
@@ -91,6 +101,37 @@ class GANScheme(object):
         self.generator_learning_rate = generator_learning_rate
         self.discriminator_learning_rate = discriminator_learning_rate
 
+    def set_generator_optimizer(self, optimizer, **kwargs):
+        self.generator_optimizer = optimizer
+        self.generator_optimizer_data = kwargs
+
+    def set_discriminator_optimizer(self, optimizer, **kwargs):
+        self.discriminator_optimizer = optimizer
+        self.discriminator_optimizer_data = kwargs
+
+    def get_optimizer_by_name(self, optimizer_name):
+        # Check optimizer
+        if optimizer_name is None:
+            return None
+        if optimizer_name == "Adam":
+            return adam_optimizer
+        elif optimizer_name == "Momentum":
+            return momentum_optimizer
+        elif optimizer_name == "RMSprop":
+            return rmsprop_optimizer
+        elif optimizer_name == "SGD":
+            return sgd_optimizer
+        else:
+            raise AttributeError("Optimizer {} not defined.".format(self.optimizer))
+
+    def restore(self):
+        try:
+            self.discriminator.restore()
+            self.discriminator_fake.restore()
+            self.generator.restore()
+        except Exception:
+            Messenger.text("No restore points in {}".format(self.log_path))
+
     def train(self, train_iter, generator_steps=1, discriminator_steps=1, train_step=100, epochs=1000,
               sample_per_epoch=1000, summary_step=5, reshape_input=None, save_model=True):
         # Check Build model
@@ -112,12 +153,14 @@ class GANScheme(object):
 
         # Define optimizers Generator and Discriminator
         with tf.name_scope("train"):
-            update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-            optimizer_generator = tf.train.AdamOptimizer(self.generator_learning_rate)
-            optimizer_discriminator = tf.train.AdamOptimizer(self.discriminator_learning_rate)
-            with tf.control_dependencies(update_ops):
-                optimizer_generator = optimizer_generator.minimize(generator_loss, var_list=g_vars)
-                optimizer_discriminator = optimizer_discriminator.minimize(discriminator_loss, var_list=d_vars)
+            optimizer_generator = self.get_optimizer_by_name(self.generator_optimizer)(
+                generator_loss, self.generator_learning_rate, self.generator_optimizer_data, g_vars)
+            optimizer_discriminator = self.get_optimizer_by_name(self.discriminator_optimizer)(
+                discriminator_loss,  self.discriminator_learning_rate, self.discriminator_optimizer_data, d_vars)
+
+        # Information about optimizers
+        Messenger.fancy_message("Generator optimizer: {}".format(self.generator_optimizer))
+        Messenger.fancy_message("Discriminator optimizer: {}".format(self.discriminator_optimizer))
 
         # Save optimizer functions
         self.discriminator.optimizer_func = optimizer_discriminator

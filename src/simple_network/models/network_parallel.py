@@ -68,10 +68,14 @@ class NetworkParallel(SNModel):
                                                             name='labels')
             y_labels = self.output_labels_placeholder
 
+        # Define loss
         loss_function = self.get_loss_by_name()
         if loss_function is not None:
             self.loss_func = loss_function(logits=layer_output, labels=y_labels, loss_data=self.loss_data)
             logger.info("Loss function: {}".format(self.loss))
+
+        # Define optimizer
+        self.learning_rate = learning_rate
         optimizer_function = self.get_optimizer_by_name()
         if optimizer_function is not None:
             self.optimizer_func = optimizer_function(self.loss_func, learning_rate, self.optimizer_data)
@@ -90,6 +94,7 @@ class NetworkParallel(SNModel):
         # Initialize saver for future saving weights
         self.model_build = True
         self.saver = tf.train.Saver()
+        self.save_model_info()
 
     def train(self, train_iter, test_iter, train_step=100, test_step=100, epochs=1000, sample_per_epoch=1000,
               summary_step=5, reshape_input=None, embedding_num=None, save_model=True, early_stop=None,

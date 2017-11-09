@@ -1,9 +1,9 @@
 import os
 import copy
-import shutil
 import logging
 import tempfile
 import tensorflow as tf
+from simple_network.tools.utils import ModelLogger
 from simple_network.tools.utils import create_sprite_image
 from simple_network.layers import BatchNormalizationLayer, DropoutLayer
 from simple_network.metrics import cross_entropy, accuracy, mean_square, mean_absolute, \
@@ -55,16 +55,12 @@ class SNModel(object):
         # If summary_path is None set tempdir
         if summary_path is None:
             self.summary_path = tempfile.gettempdir()
-        else:
-            self.summary_path = os.path.join(summary_path, "logs")
-            if os.path.isdir(self.summary_path):
-                # Remove old tensor files
-                files_in_dir = os.listdir(self.summary_path)
-                for s_file in files_in_dir:
-                    shutil.rmtree(os.path.join(self.summary_path, s_file))
-            else:
-                # Create dict if not exist
-                os.mkdir(self.summary_path)
+        self.summary_path = os.path.join(summary_path, "logs")
+        self.model_info_path = os.path.join(summary_path, "info")
+        if not os.path.isdir(self.summary_path):
+            os.mkdir(self.summary_path)
+        if not os.path.isdir(self.model_info_path):
+            os.mkdir(self.model_info_path)
 
         if metric is None:
             metric = []
@@ -80,6 +76,7 @@ class SNModel(object):
         self.is_training_placeholder = None
         self.optimizer = None
         self.optimizer_data = {}
+        self.learning_rate = None
         self.loss = None
         self.loss_data = {}
         self.metric_list_func = []
@@ -96,6 +93,34 @@ class SNModel(object):
             self.sess = session
         self.train_writer = tf.summary.FileWriter(os.path.join(self.summary_path, "train"))
         self.test_writer = tf.summary.FileWriter(os.path.join(self.summary_path, "test"))
+
+    def save_model_info(self):
+        model_logger = ModelLogger(self.model_info_path)
+        model_logger.title("Model Information")
+        model_logger.add_property("Input layer shape", self.input_size)
+        model_logger.add_to_json("input_shape", self.input_size)
+
+        model_logger.add_property("Optimizer", self.optimizer)
+        model_logger.add_to_json("optimizer", self.optimizer)
+
+        model_logger.add_property("Learning Rate", self.learning_rate)
+        model_logger.add_to_json("learning_rate", self.learning_rate)
+
+        model_logger.add_property("Loss", self.loss)
+        model_logger.add_to_json("loss", self.loss)
+
+        model_logger.add_property("Metrics", self.metric)
+        model_logger.add_to_json("metrics", self.metric)
+        model_logger.title("Layers")
+        layers_data = []
+        for layer in self.layers:
+            layers_data.append({"name": layer.layer_type, "input_shape": layer.input_shape,
+                                "output_shape": layer.output_shape})
+            model_logger.info("{} layer| Input shape: {}, Output shape: {}".format(layer.layer_type,
+                                                                                   layer.input_shape,
+                                                                                   layer.output_shape))
+        model_logger.add_to_json("layers", layers_data)
+        model_logger.save()
 
     def save(self, global_step=None):
         self.saver.save(self.sess, os.path.join(self.save_path, "tensorflow_model"),
