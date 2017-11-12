@@ -159,15 +159,15 @@ class GANScheme(object):
 
     def restore(self):
         try:
-            self.discriminator.restore()
             self.discriminator_fake.restore()
+            self.discriminator.restore()
             self.generator.restore()
             Messenger.text("Model successful restored.")
         except Exception:
             Messenger.text("No restore points in {}".format(self.log_path))
 
     def train(self, train_iter, generator_steps=1, discriminator_steps=1, train_step=100, epochs=1000,
-              sample_per_epoch=1000, summary_step=5, reshape_input=None, save_model=True):
+              sample_per_epoch=1000, summary_step=5, reshape_input=None, save_model=True, restore_model=True):
         # Check Build model
         if not self.discriminator.model_build:
             raise AttributeError("Discriminator Model should be build before training it.")
@@ -213,6 +213,10 @@ class GANScheme(object):
         # Merge summaries
         merged_summary = tf.summary.merge_all()
         self.session.run(tf.global_variables_initializer())
+
+        # Restore model
+        if restore_model:
+            self.restore()
 
         # Set Moving Average for both models
         gen_moving_avg_train = []
