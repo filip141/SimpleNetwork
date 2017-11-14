@@ -56,6 +56,8 @@ class SNModel(object):
         # If summary_path is None set tempdir
         if summary_path is None:
             self.summary_path = tempfile.gettempdir()
+        if not os.path.isdir(summary_path):
+            os.mkdir(summary_path)
         current_time_str = time.strftime("%Y%m%d%H%M%S")
         self.summary_path = os.path.join(summary_path, "logs_{}".format(current_time_str))
         self.model_info_path = os.path.join(summary_path, "info")
@@ -116,11 +118,22 @@ class SNModel(object):
         model_logger.title("Layers")
         layers_data = []
         for layer in self.layers:
-            layers_data.append({"name": layer.layer_type, "input_shape": layer.input_shape,
-                                "output_shape": layer.output_shape})
-            model_logger.info("{} layer| Input shape: {}, Output shape: {}".format(layer.layer_type,
-                                                                                   layer.input_shape,
-                                                                                   layer.output_shape))
+            if isinstance(layer, NetworkNode):
+                model_logger.info("Network node")
+                node_layers = []
+                for inside_layer in layer.node_layers:
+                    node_layers.append({"name": inside_layer.layer_type, "input_shape": inside_layer.input_shape,
+                                        "output_shape": inside_layer.output_shape})
+                    model_logger.info("----{} layer| Input shape: {}, Output shape: {}"
+                                      .format(inside_layer.layer_type, inside_layer.input_shape,
+                                              inside_layer.output_shape))
+                layers_data.append({"name": "network_node", "node_layers": node_layers})
+            else:
+                layers_data.append({"name": layer.layer_type, "input_shape": layer.input_shape,
+                                    "output_shape": layer.output_shape})
+                model_logger.info("{} layer| Input shape: {}, Output shape: {}".format(layer.layer_type,
+                                                                                       layer.input_shape,
+                                                                                       layer.output_shape))
         model_logger.add_to_json("layers", layers_data)
         model_logger.save()
 
