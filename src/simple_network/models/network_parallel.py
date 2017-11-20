@@ -4,7 +4,8 @@ import logging
 import numpy as np
 import tensorflow as tf
 from simple_network.layers.layers import Layer
-from simple_network.models.netmodel import SNModel, NetworkNode
+from simple_network.models.netmodel import SNModel
+from simple_network.models.additional_nodes import NetworkNode, ResidualNode
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -19,29 +20,6 @@ class NetworkParallel(SNModel):
         super(NetworkParallel, self).__init__(input_size, summary_path, metric, input_summary,
                                               input_placeholder, session)
 
-    def build_node(self, node, layer_input, layer_idx):
-        n_layers = node.nodes_num()
-        outputs_list = []
-        reduce_output = node.get_output_info()
-        with tf.name_scope(node.layer_name):
-            if not isinstance(layer_input, list):
-                layer_input = [layer_input for _ in range(0, n_layers)]
-            for l_in, l_ll, l_idx in zip(layer_input, node.node_layers, range(n_layers)):
-                # Build layer
-                l_out = self.build_layer(l_ll, l_in, "{}_{}".format(layer_idx, l_idx), enable_log=False)
-                # Save layer size as node size and add output to list
-                node.layer_size = l_ll.layer_size
-                outputs_list.append(l_out)
-                logger.info("Node {} | {} layer| Input shape: {}, Output shape: {}"
-                            .format(node.layer_name, l_ll.layer_type, l_ll.input_shape, l_ll.output_shape))
-            if reduce_output == 'mean':
-                output_val = tf.reduce_mean(tf.stack(outputs_list), axis=0)
-            elif reduce_output == "concat":
-                output_val = tf.concat(axis=3, values=outputs_list)
-            else:
-                output_val = outputs_list
-        return output_val
-
     def build_model(self, learning_rate=0.01, out_placeholder=True):
         # Define input
         logger.info("-" * 90)
@@ -50,13 +28,19 @@ class NetworkParallel(SNModel):
         logger.info("Input layer| shape: {}".format(self.input_size))
 
         # build model
+        layer_output = None
         layer_input = self.input_layer_placeholder
         self.is_training_placeholder = tf.placeholder(tf.bool, name='is_training')
         for l_idx, layer in enumerate(self.layers):
             if isinstance(layer, Layer):
-                layer_output = self.build_layer(layer, layer_input, l_idx)
+                # Define building function for layer
+                layer_output = Layer.build_layer(layer, layer_input, l_idx, self.is_training_placeholder)
             elif isinstance(layer, NetworkNode):
-                layer_output = self.build_node(layer, layer_input, l_idx)
+                # Define build function for NetworkNode for multiple stream networks
+                layer_output = NetworkNode.build_node(layer, layer_input, l_idx, self.is_training_placeholder)
+            elif isinstance(layer, ResidualNode):
+                # Define build function for NetworkNode for multiple stream networks
+                layer_output = ResidualNode.build_node(layer, layer_input, l_idx, self.is_training_placeholder)
             else:
                 raise AttributeError("Object not defined {}".format(type(layer)))
             self.layer_outputs.append(layer_output)
@@ -98,7 +82,7 @@ class NetworkParallel(SNModel):
 
     def train(self, train_iter, test_iter, train_step=100, test_step=100, epochs=1000, sample_per_epoch=1000,
               summary_step=5, reshape_input=None, embedding_num=None, save_model=True, early_stop=None,
-              early_stop_lower=False):
+              early_stop_lower=False, test_update=10):
         # Check Build model
         if not self.model_build:
             raise AttributeError("Model should be build before training it.")
@@ -149,7 +133,9 @@ class NetworkParallel(SNModel):
                     test_data = {self.input_layer_placeholder: test_batch_x,
                                  self.output_labels_placeholder: test_batch_y,
                                  self.is_training_placeholder: False}
-                    test_metrics_result = self.sess.run(self.metric_list_func, feed_dict=test_data)
+                    # Update test statistics every n iterations
+                    if sample_iter % test_update == 0:
+                        test_metrics_result = self.sess.run(self.metric_list_func, feed_dict=test_data)
                     moving_avg_test = [x_it[-9:] + [train_met] for x_it, train_met in zip(moving_avg_test,
                                                                                           test_metrics_result)]
                     moving_avg_test_mean = [np.mean(x_it_n) for x_it_n in moving_avg_test]

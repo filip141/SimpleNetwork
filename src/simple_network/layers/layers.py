@@ -1,6 +1,10 @@
+import logging
 import tensorflow as tf
 from abc import ABCMeta, abstractmethod
 from tensorflow.python.training import moving_averages
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def batch_norm(x, scope, is_training, epsilon=0.001, decay=0.99):
@@ -82,6 +86,21 @@ class Layer(object):
     def build_graph(self, layer_input):
         pass
 
+    @staticmethod
+    def build_layer(layer, layer_input, layer_idx, is_training, enable_log=True):
+        if isinstance(layer, BatchNormalizationLayer):
+            layer.set_training_indicator(is_training)
+        elif isinstance(layer, DropoutLayer):
+            layer.set_training_indicator(is_training)
+        # Add number if default
+        if layer.layer_name == layer.default_name:
+            layer.layer_name = "{}_{}".format(layer.layer_name, layer_idx)
+        layer_output = layer.build_graph(layer_input)
+        if enable_log:
+            logger.info("{} layer| Input shape: {}, Output shape: {}".format(layer.layer_type, layer.input_shape,
+                                                                             layer.output_shape))
+        return layer_output
+
 
 class DropoutLayer(Layer):
 
@@ -133,13 +152,13 @@ class BatchNormalizationLayer(Layer):
         self.layer_size = self.input_shape
         with tf.name_scope(self.layer_name):
             self.output = batch_norm(self.layer_input, "bn_{}".format(self.layer_name), self.is_training)
+            self.output_shape = self.output.get_shape().as_list()[1:]
             if self.save_summaries:
                 with tf.variable_scope("bn_{}".format(self.layer_name), reuse=True):
                     beta = tf.get_variable("beta", [self.layer_size[-1]])
                     gamma = tf.get_variable("gamma", [self.layer_size[-1]])
                     tf.summary.scalar('bn_beta', beta[0])
                     tf.summary.scalar('bn_gamma', gamma[0])
-                self.output_shape = self.output.get_shape().as_list()[1:]
                 tf.summary.histogram("batch_normalization", self.output)
         return self.output
 

@@ -20,7 +20,8 @@ class ReluLayer(Layer):
         with tf.variable_scope(self.layer_name, reuse=self.reuse):
             self.output = tf.nn.relu(self.layer_input, name="relu_activation")
             self.output_shape = self.output.get_shape().as_list()[1:]
-            tf.summary.histogram("relu_activation", self.output)
+            if self.save_summaries:
+                tf.summary.histogram("relu_activation", self.output)
         return self.output
 
 

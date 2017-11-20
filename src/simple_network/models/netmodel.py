@@ -1,12 +1,11 @@
 import os
-import copy
 import time
 import logging
 import tempfile
 import tensorflow as tf
 from simple_network.tools.utils import ModelLogger
 from simple_network.tools.utils import create_sprite_image
-from simple_network.layers import BatchNormalizationLayer, DropoutLayer
+from simple_network.models.additional_nodes import NetworkNode, ResidualNode
 from simple_network.metrics import cross_entropy, accuracy, mean_square, mean_absolute, \
     mean_absolute_weighted_4, cross_entropy_sigmoid, binary_accuracy
 from simple_network.train.losses import custom_loss
@@ -20,35 +19,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class NetworkNode(object):
-
-    def __init__(self, name="node_layer", reduce_output=None):
-        if reduce_output is None:
-            reduce_output = ""
-        self.layer_size = None
-        self.node_layers = []
-        self.layer_name = name
-        self.reduce_output = reduce_output
-
-    def add(self, layer):
-        self.node_layers.append(layer)
-
-    def nodes_num(self):
-        return len(self.node_layers)
-
-    def get_output_info(self):
-        return self.reduce_output.lower()
-
-    def add_many(self, layer, ntimes=1):
-        f_layer = copy.deepcopy(layer)
-        f_layer.reuse = False
-        self.add(f_layer)
-        for _ in range(1, ntimes):
-            n_layer = copy.deepcopy(layer)
-            n_layer.reuse = True
-            self.add(n_layer)
-
-
 class SNModel(object):
 
     def __init__(self, input_size, summary_path=None, metric=None, input_summary=None, input_placeholder=None,
@@ -58,9 +28,9 @@ class SNModel(object):
             self.summary_path = tempfile.gettempdir()
         if not os.path.isdir(summary_path):
             os.mkdir(summary_path)
-        current_time_str = time.strftime("%Y%m%d%H%M%S")
+        current_time_str = time.strftime("%Y%m%d_%H%M_%S")
         self.summary_path = os.path.join(summary_path, "logs_{}".format(current_time_str))
-        self.model_info_path = os.path.join(summary_path, "info")
+        self.model_info_path = os.path.join(self.summary_path, "info")
         if not os.path.isdir(self.summary_path):
             os.mkdir(self.summary_path)
         if not os.path.isdir(self.model_info_path):
@@ -118,7 +88,7 @@ class SNModel(object):
         model_logger.title("Layers")
         layers_data = []
         for layer in self.layers:
-            if isinstance(layer, NetworkNode):
+            if isinstance(layer, NetworkNode) or isinstance(layer, ResidualNode):
                 model_logger.info("Network node")
                 node_layers = []
                 for inside_layer in layer.node_layers:
@@ -146,20 +116,6 @@ class SNModel(object):
 
     def add(self, new_layer):
         self.layers.append(new_layer)
-
-    def build_layer(self, layer, layer_input, layer_idx, enable_log=True):
-        if isinstance(layer, BatchNormalizationLayer):
-            layer.set_training_indicator(self.is_training_placeholder)
-        elif isinstance(layer, DropoutLayer):
-            layer.set_training_indicator(self.is_training_placeholder)
-        # Add number if default
-        if layer.layer_name == layer.default_name:
-            layer.layer_name = "{}_{}".format(layer.layer_name, layer_idx)
-        layer_output = layer.build_graph(layer_input)
-        if enable_log:
-            logger.info("{} layer| Input shape: {}, Output shape: {}".format(layer.layer_type, layer.input_shape,
-                                                                             layer.output_shape))
-        return layer_output
 
     def set_optimizer(self, optimizer, **kwargs):
         self.optimizer = optimizer

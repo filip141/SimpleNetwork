@@ -2,6 +2,7 @@ import time
 import logging
 import numpy as np
 import tensorflow as tf
+from simple_network.layers.layers import Layer
 from simple_network.models.netmodel import SNModel
 
 logging.basicConfig(level=logging.INFO)
@@ -24,10 +25,11 @@ class NetworkModel(SNModel):
         logger.info("Input layer| shape: {}".format(self.input_size))
 
         # build model
+        layer_output = None
         layer_input = self.input_layer_placeholder
         self.is_training_placeholder = tf.placeholder(tf.bool, name='is_training')
         for l_idx, layer in enumerate(self.layers):
-            layer_output = self.build_layer(layer, layer_input, l_idx)
+            layer_output = Layer.build_layer(layer, layer_input, l_idx, self.is_training_placeholder)
             layer_input = layer_output
         # Output placeholder
         self.output_labels_placeholder = tf.placeholder(tf.float32, [None, self.layers[-1].layer_size[-1]],
