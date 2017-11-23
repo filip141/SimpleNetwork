@@ -242,13 +242,15 @@ class GANScheme(object):
                                   self.discriminator_fake.is_training_placeholder: True}
                 # Train network according to loss or not
                 if not loss_supervised:
+                    update_gen = ""
+                    update_dsc = ""
                     if sample_iter % discriminator_steps == 0:
-                        updated_network = "Discriminator"
+                        update_dsc = "Discriminator"
                         self.session.run(self.discriminator.optimizer_func, feed_dict=dsc_train_data)
                     if sample_iter % generator_steps == 0:
-                        updated_network = "Generator"
+                        update_gen = "Generator"
                         self.session.run(self.generator.optimizer_func, feed_dict=dsc_train_data)
-
+                    updated_network = "{} {}".format(update_gen, update_dsc)
                     # Calculate loss and moving mean for it
                     err_generator = self.session.run(generator_loss, feed_dict=dsc_train_data)
                     err_discriminator = self.session.run(discriminator_loss, feed_dict=dsc_train_data)

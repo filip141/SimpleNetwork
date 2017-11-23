@@ -120,7 +120,7 @@ class DeconvolutionLayer(Layer):
 
 class MaxPoolingLayer(Layer):
 
-    def __init__(self, pool_size, stride=1, padding='same', name='max_pooling', summaries=True, reuse=None):
+    def __init__(self, pool_size, stride=1, padding='same', name='max_pooling', summaries=False, reuse=None):
         super(MaxPoolingLayer, self).__init__("MaxPooling", name, 'max_pooling', summaries, reuse)
         # Define variables
         self.weights = None

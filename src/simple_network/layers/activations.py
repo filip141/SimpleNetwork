@@ -25,6 +25,28 @@ class ReluLayer(Layer):
         return self.output
 
 
+class SwishLayer(Layer):
+
+    def __init__(self, name='swish', summaries=True, reuse=None):
+        super(SwishLayer, self).__init__("SwishLayer", name, 'swish', summaries, reuse)
+        # Define layer properties
+        self.layer_input = None
+        self.input_shape = None
+        self.output_shape = None
+        self.output = None
+        self.layer_size = None
+
+    def build_graph(self, layer_input):
+        self.layer_input = layer_input
+        self.input_shape = self.layer_input.get_shape().as_list()[1:]
+        self.layer_size = self.input_shape
+        with tf.variable_scope(self.layer_name):
+            self.output = self.layer_input * tf.nn.sigmoid(self.layer_input)
+            self.output_shape = self.output.get_shape().as_list()[1:]
+            tf.summary.histogram("swish_activation", self.output)
+        return self.output
+
+
 class LeakyReluLayer(Layer):
 
     def __init__(self, alpha=0.1, name='leaky_relu', summaries=True, reuse=None):

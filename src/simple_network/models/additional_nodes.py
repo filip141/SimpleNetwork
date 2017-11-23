@@ -79,29 +79,24 @@ class ResidualNode(object):
     def nodes_num(self):
         return len(self.node_layers)
 
-    def get_layer(self):
-        for _ in range(0, self.ntimes):
-            for layer in self.node_layers:
-                n_layer = copy.deepcopy(layer)
-                yield n_layer
-
     @staticmethod
     def build_node(node, layer_input, layer_idx, is_training):
-        first_layer_input = layer_input
         node.n_layers = node.nodes_num() * node.ntimes
-        l_out = None
         with tf.name_scope(node.layer_name):
-            for l_idx, layer in enumerate(node.get_layer()):
-                layer.layer_name += "_{}".format(l_idx + 1)
-                l_out = Layer.build_layer(layer, layer_input, "{}_{}".format(layer_idx, l_idx), is_training,
-                                          enable_log=False)
-                layer_input = l_out
-                node.node_layers_outputs.append(l_out)
-                logger.info("Residual Node {} | {} layer| Input shape: {}, Output shape: {}"
-                            .format(node.layer_name, layer.layer_type, layer.input_shape, layer.output_shape))
-        input_shape = first_layer_input.get_shape().as_list()
-        output_shape = l_out.get_shape().as_list()
-        if not input_shape == output_shape:
-            raise ValueError("Input Shape and Output Shape does not match. Can't add both.")
-        node.node_layers_outputs.append(l_out + first_layer_input)
-        return l_out + first_layer_input
+            for t_idx in range(0, node.ntimes):
+                block_in = layer_input
+                with tf.name_scope("residual_layers_{}".format(t_idx)):
+                    for l_idx, layer in enumerate(node.node_layers):
+                        n_layer = copy.deepcopy(layer)
+                        l_full_id = t_idx * node.nodes_num() + l_idx + 1
+                        n_layer.layer_name += "_{}".format(l_full_id)
+                        l_out = Layer.build_layer(n_layer, layer_input, "{}_{}".format(layer_idx, l_full_id), is_training,
+                                                  enable_log=False)
+                        layer_input = l_out
+                        node.node_layers_outputs.append(l_out)
+                        logger.info("Residual Node {} | {} layer| Input shape: {}, Output shape: {}"
+                                    .format(node.layer_name, n_layer.layer_type, n_layer.input_shape,
+                                            n_layer.output_shape))
+                    node.node_layers_outputs[-1] += block_in
+                    layer_input += block_in
+        return layer_input
