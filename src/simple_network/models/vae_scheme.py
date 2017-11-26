@@ -11,11 +11,16 @@ from simple_network.train.optimizers import adam_optimizer, momentum_optimizer, 
 class VAEScheme(object):
     __metaclass__ = ABCMeta
 
-    def __init__(self, encoder_input_size, decoder_input_size, batch_size, log_path):
+    def __init__(self, encoder_input_size, decoder_input_size, batch_size, log_path, labels='none',
+                 labels_size=10):
         self.input_summary = {"img_number": 5}
         self.batch_size = batch_size
+        self.labels = labels
+        self.labels_size = labels_size
+
+        self.encoder_in = None
         self.encoder_input_size = encoder_input_size
-        self.decoder_input_size = decoder_input_size
+        self.decoder_input_size = [decoder_input_size, ]
 
         # Optimizer
         self.loss_func = None
@@ -27,6 +32,8 @@ class VAEScheme(object):
         self.session = tf.Session()
 
         # Encoder variables
+        self.encoder_labels = None
+        self.decoder_labels = None
         self.encoder_z_mean = None
         self.encoder_z_logstd = None
 
@@ -48,10 +55,45 @@ class VAEScheme(object):
             os.mkdir(decoder_path)
 
         # Define Encoder and Decoder model
+        # For conditional [CVAE] define labels input for encoder,
+        if labels == 'convo_style':
+            # In this mode labels are merged with input placeholder
+            # Define
+            labels_size_t = [None, 1, labels_size]
+            decoder_input_size_final = [self.decoder_input_size[0] + labels_size]
+            input_enc_size = [batch_size, ] + self.encoder_input_size
+            input_layer_placeholder = tf.placeholder(tf.float32, input_enc_size, name='x')
+            labels_placeholder = tf.placeholder(tf.float32, labels_size_t, name='conditional_placeholder')
+
+            # Define labels and concat them
+            labels_y1 = tf.reshape(labels_placeholder, shape=[batch_size, 1, 1, labels_size])
+            new_input_placeholder = tf.concat(axis=3, values=[input_layer_placeholder,
+                                                              labels_y1*tf.ones(
+                                                                  [input_enc_size[0], input_enc_size[1],
+                                                                   input_enc_size[2], labels_size])])
+            # Save labels and input images placeholder also construct input size vector for encoder
+            self.encoder_labels = labels_placeholder
+            enc_input_size_final = [self.encoder_input_size[0], self.encoder_input_size[1],
+                                    self.encoder_input_size[2] + labels_size]
+            self.encoder_in = input_layer_placeholder
+        else:
+            # Vanilla VAE mode, in this option labels placeholder is not merged with input placeholder
+            input_enc_size = [None, ] + self.encoder_input_size
+            new_input_placeholder = tf.placeholder(tf.float32, input_enc_size, name='x')
+
+            # Define input size vectors for vanilla VAE
+            decoder_input_size_final = self.decoder_input_size
+            enc_input_size_final = self.encoder_input_size
+            self.encoder_in = new_input_placeholder
+
+        # Define network objects for decoder [train], decoder [predict] and encoder
+        # Both decoders sharing weights together.
         self.decoder_network_train = None
-        self.encoder_network = NetworkParallel(self.encoder_input_size, input_summary=self.input_summary,
-                                               summary_path=self.encoder_path, session=self.session)
-        self.decoder_network = NetworkParallel(self.decoder_input_size, input_summary=None,
+        self.decoder_output_size = self.encoder_input_size
+        self.encoder_network = NetworkParallel(enc_input_size_final, input_summary=self.input_summary,
+                                               summary_path=self.encoder_path, session=self.session,
+                                               input_placeholder=new_input_placeholder)
+        self.decoder_network = NetworkParallel(decoder_input_size_final, input_summary=None,
                                                summary_path=self.decoder_path, session=self.session)
 
     @abstractmethod
@@ -73,6 +115,14 @@ class VAEScheme(object):
         noise_samples = tf.random_normal([self.batch_size, self.decoder_input_size[0]], 0, 1, dtype=tf.float32)
         self.encoder_z_mean, self.encoder_z_logstd = self.encoder_network.layer_outputs[-1]
         guessed_z = self.encoder_z_mean + (tf.exp(.5 * self.encoder_z_logstd) * noise_samples)
+
+        # Define decoder input for conditional form [CVAE]
+        if self.labels == 'convo_style':
+            labels_size_t = [None, 1, self.labels_size]
+            self.decoder_input_size = [self.decoder_input_size[0] + self.labels_size]
+            self.decoder_labels = tf.placeholder(tf.float32, labels_size_t, name='decoder_cond_input')
+            dec_lab_reshape = tf.reshape(self.decoder_labels, [-1, self.labels_size])
+            guessed_z = tf.concat(axis=1, values=[guessed_z, dec_lab_reshape])
         self.decoder_network_train = NetworkParallel(self.decoder_input_size, input_summary=None,
                                                      summary_path=self.decoder_path, session=self.session,
                                                      input_placeholder=guessed_z)
@@ -109,22 +159,31 @@ class VAEScheme(object):
             raise AttributeError("Optimizer {} not defined.".format(self.optimizer))
 
     def vae_loss(self, decoder_output, z_mean, z_log_std):
-        generation_loss = tf.reduce_sum(self.encoder_network.input_layer_placeholder * tf.log(decoder_output + 1e-9) +
-                                        (1 - self.encoder_network.input_layer_placeholder) *
-                                        tf.log(1 - decoder_output + 1e-9))
-        kl_term = -0.5 * tf.reduce_sum(1 + 2 * z_log_std - tf.pow(z_mean, 2) - tf.exp(2 * z_log_std))
+        decoder_out_loss_in = tf.reshape(decoder_output, [-1, np.prod(self.decoder_output_size)])
+        encoder_in_loss_in = tf.reshape(self.encoder_in, [-1, np.prod(self.encoder_input_size)])
+        generation_loss = tf.reduce_sum(encoder_in_loss_in * tf.log(decoder_out_loss_in + 1e-9) +
+                                        (1 - encoder_in_loss_in) *
+                                        tf.log(1 - decoder_out_loss_in + 1e-9), axis=1)
+        kl_term = -0.5 * tf.reduce_sum(1 + 2 * z_log_std - tf.pow(z_mean, 2) - tf.exp(2 * z_log_std), axis=1)
         vae_loss = -tf.reduce_mean(generation_loss - kl_term)
-        tf.summary.scalar("generation_loss", generation_loss)
-        tf.summary.scalar("kl_term", kl_term)
+        tf.summary.scalar("generation_loss", tf.reduce_mean(generation_loss))
+        tf.summary.scalar("kl_term", tf.reduce_mean(kl_term))
         tf.summary.scalar("VAE_loss", vae_loss)
-        tf.summary.image('output', decoder_output, 5)
+
+        summary_output_data = decoder_output
+        summary_shape = decoder_output.get_shape().as_list()
+        output_last_dim = summary_shape[-1]
+        if len(summary_shape) == 4:
+            if output_last_dim != 2 and output_last_dim != 3:
+                summary_output_data = tf.expand_dims(summary_output_data[:, :, :, 0], axis=3)
+            tf.summary.image('output', summary_output_data, 5)
         return vae_loss
 
     def restore(self):
         try:
             self.encoder_network.restore()
-            self.decoder_network.restore()
             self.decoder_network_train.restore()
+            self.decoder_network.restore()
             Messenger.text("Model successful restored.")
         except Exception:
             Messenger.text("No restore points in {}".format(self.log_path))
@@ -171,14 +230,21 @@ class VAEScheme(object):
             Messenger.text("Training: Epoch number {}".format(epoch_idx))
             for sample_iter in range(sample_per_epoch):
                 # Load Training batch
-                batch_x, _ = train_iter.next_batch(train_step)
+                batch_x, batch_y = train_iter.next_batch(train_step)
                 # reshape train input if defined
                 if reshape_input is not None:
                     batch_x = batch_x.reshape([train_step, ] + reshape_input)
 
-                dsc_train_data = {self.encoder_network.input_layer_placeholder: batch_x,
-                                  self.encoder_network.is_training_placeholder: True,
-                                  self.decoder_network_train.is_training_placeholder: True}
+                dsc_train_data = {}
+                # Reshape input and add labels for convo_style CVAE
+                if self.labels == 'convo_style':
+                    dsc_train_data[self.encoder_labels] = batch_y[:, np.newaxis]
+                    dsc_train_data[self.decoder_labels] = batch_y[:, np.newaxis]
+                # Set feed dict data
+                dsc_train_data[self.encoder_in] = batch_x
+                dsc_train_data[self.encoder_network.is_training_placeholder] = True
+                dsc_train_data[self.decoder_network_train.is_training_placeholder] = True
+
                 # Train
                 self.session.run(self.decoder_network_train.optimizer_func, feed_dict=dsc_train_data)
 
@@ -192,11 +258,16 @@ class VAEScheme(object):
                 # Save summary
                 if sample_iter % summary_step == 0:
                     vec_ref = np.random.uniform(0.0, 1.0, size=[train_step, ] + self.decoder_network.input_size)
-                    summary_data = {self.encoder_network.input_layer_placeholder: batch_x,
+                    summary_data = {self.encoder_in: batch_x,
                                     self.decoder_network.input_layer_placeholder: vec_ref,
                                     self.encoder_network.is_training_placeholder: False,
                                     self.decoder_network_train.is_training_placeholder: False,
                                     self.decoder_network.is_training_placeholder: False}
+
+                    if self.labels == 'convo_style':
+                        summary_data[self.encoder_labels] = batch_y[:, np.newaxis]
+                        summary_data[self.decoder_labels] = batch_y[:, np.newaxis]
+
                     sum_res_encoder = self.session.run(merged_summary, summary_data)
                     sum_res_decoder = self.session.run(merged_summary, summary_data)
                     self.encoder_network.train_writer.add_summary(

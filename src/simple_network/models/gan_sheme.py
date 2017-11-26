@@ -221,7 +221,6 @@ class GANScheme(object):
             self.restore()
 
         # Set Moving Average for both models
-        updated_network = None
         gen_moving_avg_train = []
         dsc_moving_avg_train = []
         for epoch_idx in range(epochs):

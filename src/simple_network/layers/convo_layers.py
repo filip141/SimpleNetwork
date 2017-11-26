@@ -46,6 +46,8 @@ class ConvolutionalLayer(Layer):
                                               strides=[1, self.stride, self.stride, 1],
                                               padding=self.padding)
             self.not_activated = tf.nn.bias_add(self.not_activated, self.bias)
+
+            # Use activation
             if self.activation != 'linear':
                 self.activated_output = getattr(tf.nn, self.activation)(self.not_activated)
             else:
