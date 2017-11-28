@@ -198,7 +198,7 @@ class SNModel(object):
             if len(summary_shape) == 4:
                 if input_last_dim != 1 and input_last_dim != 3:
                     summary_input_data = tf.expand_dims(summary_input_data[:, :, :, 0], axis=3)
-                tf.summary.image('input', summary_input_data, number_of_img)
+                tf.summary.image('input', tf.maximum(summary_input_data, 0), number_of_img)
 
     def get_last_layer_prediction(self):
         return self.last_layer_prediction

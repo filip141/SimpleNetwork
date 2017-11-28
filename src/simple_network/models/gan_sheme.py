@@ -11,16 +11,35 @@ from simple_network.train.optimizers import adam_optimizer, momentum_optimizer, 
 class GANScheme(object):
     __metaclass__ = ABCMeta
 
-    def __init__(self, generator_input_size, discriminator_input_size, log_path):
+    def __init__(self, generator_input_size, discriminator_input_size, log_path, batch_size,
+                 labels='none', labels_size=10):
         self.input_summary = {"img_number": 5}
-        self.generator_input_size = generator_input_size
+        self.batch_size = batch_size
+
+        # Information about labels
+        self.labels = labels
+        self.labels_size = labels_size
+        self.labels_placeholder = None
+
+        # Save Generator and Discriminator input size
+        self.generator_in = None
+        self.discriminator_in = None
+        self.generator_true_size = [generator_input_size, ]
+        self.generator_input_size = [generator_input_size, ]
         self.discriminator_input_size = discriminator_input_size
 
+        # Set information about loss used in training
+        self.gan_model_loss = 'casual'
+        self.gan_model_loss_data = None
+
+        # Save information about optimizers
         self.generator_optimizer = "Adam"
         self.generator_optimizer_data = None
         self.discriminator_optimizer = "Adam"
         self.discriminator_optimizer_data = None
 
+        # Create variables for learning rate and initialize
+        # Tensorflow session
         self.generator_learning_rate = None
         self.discriminator_learning_rate = None
         self.session = tf.Session()
@@ -42,13 +61,64 @@ class GANScheme(object):
         if not os.path.isdir(discriminator_path):
             os.mkdir(discriminator_path)
 
+        if labels == 'convo-semi-supervised':
+            # Define input placeholder for generator
+            gen_input_size_final = [self.generator_input_size[0] + labels_size, ]
+            input_gen_size = [None, ] + self.generator_input_size
+            input_gen_placeholder = tf.placeholder(tf.float32, input_gen_size, name='gen_x')
+
+            # define placeholder for discriminator
+            dsc_input_size_final = [discriminator_input_size[0], discriminator_input_size[1],
+                                    discriminator_input_size[2] + labels_size]
+            input_dsc_size = [None, ] + self.discriminator_input_size
+            input_dsc_placeholder = tf.placeholder(tf.float32, input_dsc_size, name="dsc_x")
+
+            # Define placeholder for labels
+            labels_size_t = [None, labels_size]
+            labels_placeholder = tf.placeholder(tf.float32, labels_size_t, name='conditional_placeholder')
+
+            # Concat labels with generator input
+            new_gen_placeholder = tf.concat(axis=1, values=[input_gen_placeholder, labels_placeholder])
+
+            # Concat labels with discriminator input
+            labels_y1 = tf.reshape(labels_placeholder, shape=[self.batch_size, 1, 1, labels_size])
+            new_dsc_placeholder = tf.concat(axis=3, values=[input_dsc_placeholder,
+                                                            labels_y1*tf.ones(
+                                                                [self.batch_size,
+                                                                 input_dsc_size[1],
+                                                                 input_dsc_size[2], labels_size])])
+
+            # Save labels and input images placeholder also construct input size vector for encoder
+            self.labels_placeholder = labels_placeholder
+            self.generator_in = input_gen_placeholder
+            self.discriminator_in = input_dsc_placeholder
+            # Modify generator input
+            self.generator_input_size = [self.generator_input_size[0] + labels_size]
+        else:
+            # Vanilla GAN mode, in this option labels placeholder is not merged with input placeholder
+            input_gen_size = [None, ] + self.generator_input_size
+            new_gen_placeholder = tf.placeholder(tf.float32, input_gen_size, name='gen_x')
+
+            # Define placeholder for discriminator
+            input_dsc_size = [None, ] + self.discriminator_input_size
+            new_dsc_placeholder = tf.placeholder(tf.float32, input_dsc_size, name='dsc_x')
+
+            # Define input size vectors for vanilla VAE
+            dsc_input_size_final = self.discriminator_input_size
+            gen_input_size_final = self.generator_input_size
+            self.generator_in = new_gen_placeholder
+            self.discriminator_in = new_dsc_placeholder
+
         # Define Fake Discriminator model
         self.discriminator_fake = None
         # Define Discriminator model
-        self.discriminator = NetworkParallel(discriminator_input_size, input_summary=self.input_summary,
-                                             summary_path=discriminator_path, session=self.session)
+        self.generator_output_size = self.discriminator_input_size
+        self.discriminator = NetworkParallel(dsc_input_size_final, input_summary=self.input_summary,
+                                             summary_path=discriminator_path, session=self.session,
+                                             input_placeholder=new_dsc_placeholder)
         # Define Generator model
-        self.generator = NetworkParallel(generator_input_size, summary_path=generator_path, session=self.session)
+        self.generator = NetworkParallel(gen_input_size_final, summary_path=generator_path, session=self.session,
+                                         input_placeholder=new_gen_placeholder)
 
     @abstractmethod
     def build_generator(self, generator):
@@ -65,6 +135,13 @@ class GANScheme(object):
             red_mean = tf.reduce_mean(loss_comp)
             tf.summary.scalar("Generator_loss", red_mean)
         return red_mean
+
+    @staticmethod
+    def generator_feature_matching_loss(dsc_fake_act, dsc_legit_act):
+        with tf.name_scope("Generator_loss"):
+            loss_comp = tf.reduce_mean(tf.pow(dsc_fake_act - dsc_legit_act, 2))
+            tf.summary.scalar("Generator_loss", loss_comp)
+        return loss_comp
 
     @staticmethod
     def discriminator_loss(logits_1, targets_1, logits_2, targets_2):
@@ -106,6 +183,16 @@ class GANScheme(object):
 
         model_logger.add_property("Generator Path", self.generator_path)
         model_logger.add_to_json("discriminator_path", self.generator_path)
+
+        model_logger.title("GAN")
+        model_logger.add_property("GAN Loss", self.gan_model_loss)
+        model_logger.add_to_json("gan_loss", self.gan_model_loss)
+
+        model_logger.add_property("GAN Loss Data", self.gan_model_loss_data)
+        model_logger.add_to_json("gan_loss_data", self.gan_model_loss_data)
+
+        model_logger.add_property("GAN Labels Type", self.labels)
+        model_logger.add_to_json("gan_labels_type", self.labels)
         model_logger.save()
 
     def model_compile(self, discriminator_learning_rate, generator_learning_rate):
@@ -114,10 +201,23 @@ class GANScheme(object):
             self.build_generator(self.generator)
             Messenger.title_message("Building Generator Network")
             self.generator.build_model(generator_learning_rate, out_placeholder=False)
+
         # Define fake generator
-        self.discriminator_fake = NetworkParallel(self.discriminator_input_size, input_summary=self.input_summary,
+        dsc_final_shape = self.discriminator_input_size
+        dsc_fake_input_placeholder = self.generator.layer_outputs[-1]
+        if self.labels == "convo-semi-supervised":
+            labels_y1 = tf.reshape(self.labels_placeholder, shape=[-1, 1, 1, self.labels_size])
+            dsc_fake_input_placeholder = tf.concat(axis=3, values=[dsc_fake_input_placeholder,
+                                                                   labels_y1*tf.ones(
+                                                                       [self.batch_size,
+                                                                        self.discriminator_input_size[0],
+                                                                        self.discriminator_input_size[1],
+                                                                        self.labels_size])])
+            dsc_final_shape = [self.discriminator_input_size[0], self.discriminator_input_size[1],
+                               self.discriminator_input_size[2] + self.labels_size]
+        self.discriminator_fake = NetworkParallel(dsc_final_shape, input_summary=self.input_summary,
                                                   summary_path=self.discriminator_path,
-                                                  input_placeholder=self.generator.layer_outputs[-1],
+                                                  input_placeholder=dsc_fake_input_placeholder,
                                                   session=self.session)
         with tf.variable_scope("discriminator"):
             self.build_discriminator(self.discriminator)
@@ -157,6 +257,51 @@ class GANScheme(object):
         else:
             raise AttributeError("Optimizer {} not defined.".format(self.optimizer))
 
+    def set_loss(self, loss, **kwargs):
+        self.gan_model_loss = loss
+        self.gan_model_loss_data = kwargs
+
+    def casual_gan_loss(self):
+        lb_smooth = self.gan_model_loss_data.get("label_smooth", False)
+        fake_image = self.discriminator_fake.layer_outputs[-1]
+        real_image = self.discriminator.layer_outputs[-1]
+
+        # Add label smoothing
+        Messenger.text("Label-Smoothing {}".format(lb_smooth))
+        if lb_smooth:
+            legit_dsc_targets = 0.9 * tf.ones_like(real_image)
+        else:
+            legit_dsc_targets = tf.ones_like(real_image)
+        fake_dsc_targets = tf.zeros_like(real_image)
+        # Create losses for both networks
+        generator_loss = self.generator_loss(fake_image, tf.ones_like(fake_image))
+        discriminator_loss = self.discriminator_loss(fake_image, fake_dsc_targets,
+                                                     real_image, legit_dsc_targets)
+        return generator_loss, discriminator_loss
+
+    def feature_matching_gan_loss(self):
+        Messenger.text("Using Feature-Matching Cost")
+        layer_num = self.gan_model_loss_data.get("no_layer", -2)
+        lb_smooth = self.gan_model_loss_data.get("label_smooth", False)
+
+        dsc_legit_act = self.discriminator.layer_outputs[layer_num]
+        dsc_fake_act = self.discriminator_fake.layer_outputs[layer_num]
+        fake_image = self.discriminator_fake.layer_outputs[-1]
+        real_image = self.discriminator.layer_outputs[-1]
+
+        # Add label smoothing
+        Messenger.text("Label-Smoothing {}".format(lb_smooth))
+        if lb_smooth:
+            legit_dsc_targets = 0.9 * tf.ones_like(real_image)
+        else:
+            legit_dsc_targets = tf.ones_like(real_image)
+        fake_dsc_targets = tf.zeros_like(real_image)
+        # Create losses for both networks
+        generator_loss = self.generator_feature_matching_loss(dsc_fake_act, dsc_legit_act)
+        discriminator_loss = self.discriminator_loss(fake_image, fake_dsc_targets,
+                                                     real_image, legit_dsc_targets)
+        return generator_loss, discriminator_loss
+
     def restore(self):
         try:
             self.discriminator_fake.restore()
@@ -177,12 +322,13 @@ class GANScheme(object):
         self.save_model_info()
         Messenger.text("Loss supervised method turned on: {}".format(loss_supervised))
 
-        # Create losses for both networks
-        fake_image = self.discriminator_fake.layer_outputs[-1]
-        real_image = self.discriminator.layer_outputs[-1]
-        generator_loss = self.generator_loss(fake_image, tf.ones_like(fake_image))
-        discriminator_loss = self.discriminator_loss(fake_image, tf.zeros_like(fake_image),
-                                                     real_image, tf.ones_like(real_image))
+        # GAN model chosen loss
+        if self.gan_model_loss == 'casual':
+            generator_loss, discriminator_loss = self.casual_gan_loss()
+        elif self.gan_model_loss == 'feature-matching':
+            generator_loss, discriminator_loss = self.feature_matching_gan_loss()
+        else:
+            raise ValueError("Loss function not defined")
 
         # Used trick acquired from github page
         d_vars = [var for var in tf.trainable_variables() if "discriminator" in var.name]
@@ -227,18 +373,25 @@ class GANScheme(object):
             # samples in epoch
             Messenger.text("Training: Epoch number {}".format(epoch_idx))
             for sample_iter in range(sample_per_epoch):
+
                 # Load Training batch
-                batch_x, _ = train_iter.next_batch(train_step)
+                batch_x, batch_y = train_iter.next_batch(train_step)
+
                 # reshape train input if defined
                 if reshape_input is not None:
                     batch_x = batch_x.reshape([train_step, ] + reshape_input)
 
-                vec_ref = np.random.uniform(-1., 1., size=[train_step, ] + self.generator.input_size)
-                dsc_train_data = {self.discriminator.input_layer_placeholder: batch_x,
-                                  self.generator.input_layer_placeholder: vec_ref,
+                # Create Feed dict for tensorflow
+                vec_ref = np.random.normal(0.0, 1.0, size=[train_step, ] + self.generator_true_size)
+                dsc_train_data = {self.discriminator_in: batch_x,
+                                  self.generator_in: vec_ref,
                                   self.discriminator.is_training_placeholder: True,
                                   self.generator.is_training_placeholder: True,
                                   self.discriminator_fake.is_training_placeholder: True}
+                # Add labels for semi-supervised learning
+                if self.labels == "convo-semi-supervised":
+                    dsc_train_data[self.labels_placeholder] = batch_y
+
                 # Train network according to loss or not
                 if not loss_supervised:
                     update_gen = ""
@@ -250,6 +403,7 @@ class GANScheme(object):
                         update_gen = "Generator"
                         self.session.run(self.generator.optimizer_func, feed_dict=dsc_train_data)
                     updated_network = "{} {}".format(update_gen, update_dsc)
+
                     # Calculate loss and moving mean for it
                     err_generator = self.session.run(generator_loss, feed_dict=dsc_train_data)
                     err_discriminator = self.session.run(discriminator_loss, feed_dict=dsc_train_data)
@@ -258,6 +412,7 @@ class GANScheme(object):
                     dsc_moving_mean = np.mean(dsc_moving_avg_train)
                     gen_moving_mean = np.mean(gen_moving_avg_train)
                 else:
+
                     # Calculate loss and moving mean for it
                     err_generator = self.session.run(generator_loss, feed_dict=dsc_train_data)
                     err_discriminator = self.session.run(discriminator_loss, feed_dict=dsc_train_data)

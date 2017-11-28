@@ -56,7 +56,7 @@ class VAEScheme(object):
 
         # Define Encoder and Decoder model
         # For conditional [CVAE] define labels input for encoder,
-        if labels == 'convo_style':
+        if labels == 'convo-semi-supervised':
             # In this mode labels are merged with input placeholder
             # Define
             labels_size_t = [None, 1, labels_size]
@@ -117,7 +117,7 @@ class VAEScheme(object):
         guessed_z = self.encoder_z_mean + (tf.exp(.5 * self.encoder_z_logstd) * noise_samples)
 
         # Define decoder input for conditional form [CVAE]
-        if self.labels == 'convo_style':
+        if self.labels == 'convo-semi-supervised':
             labels_size_t = [None, 1, self.labels_size]
             self.decoder_input_size = [self.decoder_input_size[0] + self.labels_size]
             self.decoder_labels = tf.placeholder(tf.float32, labels_size_t, name='decoder_cond_input')
@@ -236,8 +236,8 @@ class VAEScheme(object):
                     batch_x = batch_x.reshape([train_step, ] + reshape_input)
 
                 dsc_train_data = {}
-                # Reshape input and add labels for convo_style CVAE
-                if self.labels == 'convo_style':
+                # Reshape input and add labels for convo-semi-supervised CVAE
+                if self.labels == 'convo-semi-supervised':
                     dsc_train_data[self.encoder_labels] = batch_y[:, np.newaxis]
                     dsc_train_data[self.decoder_labels] = batch_y[:, np.newaxis]
                 # Set feed dict data
@@ -264,7 +264,7 @@ class VAEScheme(object):
                                     self.decoder_network_train.is_training_placeholder: False,
                                     self.decoder_network.is_training_placeholder: False}
 
-                    if self.labels == 'convo_style':
+                    if self.labels == 'convo-semi-supervised':
                         summary_data[self.encoder_labels] = batch_y[:, np.newaxis]
                         summary_data[self.decoder_labels] = batch_y[:, np.newaxis]
 
