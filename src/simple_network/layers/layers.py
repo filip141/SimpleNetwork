@@ -90,7 +90,7 @@ class Layer(object):
     def build_layer(layer, layer_input, layer_idx, is_training, enable_log=True):
         if isinstance(layer, BatchNormalizationLayer):
             layer.set_training_indicator(is_training)
-        elif isinstance(layer, DropoutLayer):
+        elif isinstance(layer, DropoutGroup):
             layer.set_training_indicator(is_training)
         # Add number if default
         if layer.layer_name == layer.default_name:
@@ -102,21 +102,28 @@ class Layer(object):
         return layer_output
 
 
-class DropoutLayer(Layer):
+class DropoutGroup(Layer):
+    __metaclass__ = ABCMeta
+
+    def __init__(self, layer_type, layer_name, default_name, save_summaries, reuse):
+        super(DropoutGroup, self).__init__(layer_type, layer_name, default_name, save_summaries, reuse)
+        # Define layer properties
+        self.is_training = None
+
+    def set_training_indicator(self, is_training):
+        self.is_training = is_training
+
+
+class DropoutLayer(DropoutGroup):
 
     def __init__(self, percent=0.2, name='dropout', summaries=True, reuse=None):
         super(DropoutLayer, self).__init__("DropoutLayer", name, 'dropout', summaries, reuse)
-        # Define layer properties
         self.layer_input = None
         self.input_shape = None
         self.output_shape = None
         self.output = None
         self.layer_size = None
-        self.is_training = None
         self.percent = percent
-
-    def set_training_indicator(self, is_training):
-        self.is_training = is_training
 
     def build_graph(self, layer_input):
         self.layer_input = layer_input
@@ -125,6 +132,41 @@ class DropoutLayer(Layer):
         with tf.variable_scope(self.layer_name):
             self.output = tf.cond(self.is_training, lambda: tf.nn.dropout(self.layer_input, self.percent),
                                   lambda: tf.nn.dropout(self.layer_input, 1.0))
+            self.output_shape = self.output.get_shape().as_list()[1:]
+            tf.summary.histogram("dropout_output", self.output)
+        return self.output
+
+
+class SpatialDropoutLayer(DropoutGroup):
+
+    def __init__(self, percent=0.2, name='dropout', summaries=True, reuse=None):
+        super(SpatialDropoutLayer, self).__init__("SpatialDropoutLayer", name, 'spatial_dropout', summaries, reuse)
+        self.layer_input = None
+        self.input_shape = None
+        self.output_shape = None
+        self.output = None
+        self.layer_size = None
+        self.percent = percent
+
+    @staticmethod
+    def spatial_drop(l_input, keep_prob):
+        # Number of feature maps
+        num_feature_maps = [tf.shape(l_input)[0], tf.shape(l_input)[3]]
+        random_tensor = keep_prob
+        random_tensor += tf.random_uniform(num_feature_maps,
+                                           dtype=l_input.dtype)
+        binary_tensor = tf.floor(random_tensor)
+        binary_tensor = tf.reshape(binary_tensor, [-1, 1, 1, tf.shape(l_input)[3]])
+        ret = tf.div(l_input, keep_prob) * binary_tensor
+        return ret
+
+    def build_graph(self, layer_input):
+        self.layer_input = layer_input
+        self.input_shape = self.layer_input.get_shape().as_list()[1:]
+        self.layer_size = self.input_shape
+        with tf.variable_scope(self.layer_name):
+            self.output = tf.cond(self.is_training, lambda: self.spatial_drop(self.layer_input, self.percent),
+                                  lambda: self.spatial_drop(self.layer_input, 1.0))
             self.output_shape = self.output.get_shape().as_list()[1:]
             tf.summary.histogram("dropout_output", self.output)
         return self.output
