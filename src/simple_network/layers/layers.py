@@ -55,7 +55,7 @@ def batch_norm_layer(x, scope, is_training, epsilon=0.001, decay=0.99, reuse=Non
                                      trainable=False)
         if is_training:
             # tf.nn.moments == Calculate the mean and the variance of the tensor x
-            avg, var = tf.nn.moments(x, range(len(shape)-1))
+            avg, var = tf.nn.moments(x, list(range(len(shape)-1)))
             update_moving_avg = moving_averages.assign_moving_average(moving_avg, avg, decay)
             update_moving_var = moving_averages.assign_moving_average(moving_var, var, decay)
             control_inputs = [update_moving_avg, update_moving_var]

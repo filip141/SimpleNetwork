@@ -19,6 +19,9 @@ class NetworkParallel(SNModel):
         self.model_build = False
         super(NetworkParallel, self).__init__(input_size, summary_path, metric, input_summary,
                                               input_placeholder, session)
+        handler = logging.FileHandler(os.path.join(self.summary_path, "log.log"))
+        handler.setLevel(logging.INFO)
+        logger.addHandler(handler)
 
     def build_model(self, learning_rate=0.01, out_placeholder=True):
         # Define input
