@@ -139,9 +139,11 @@ class GANScheme(object):
     @staticmethod
     def generator_feature_matching_loss(dsc_fake_act, dsc_legit_act):
         with tf.name_scope("Generator_loss"):
-            loss_comp = tf.reduce_mean(tf.pow(dsc_fake_act - dsc_legit_act, 2))
-            tf.summary.scalar("Generator_loss", loss_comp)
-        return loss_comp
+            m_legit = tf.reduce_mean(dsc_legit_act, axis=0)
+            m_fake = tf.reduce_mean(dsc_fake_act, axis=0)
+            loss_gen = tf.reduce_mean(tf.abs(m_legit - m_fake))
+            tf.summary.scalar("Generator_loss", loss_gen)
+        return loss_gen
 
     @staticmethod
     def discriminator_loss(logits_1, targets_1, logits_2, targets_2):
