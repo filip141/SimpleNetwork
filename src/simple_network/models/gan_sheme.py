@@ -60,6 +60,7 @@ class GANScheme(object):
         self. discriminator_path = discriminator_path
         if not os.path.isdir(discriminator_path):
             os.mkdir(discriminator_path)
+        Messenger.set_logger_path(os.path.join(self.log_path, "log.log"))
 
         if labels == 'convo-semi-supervised':
             # Define input placeholder for generator

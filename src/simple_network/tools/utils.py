@@ -98,6 +98,12 @@ class Messenger(object):
         pass
 
     @staticmethod
+    def set_logger_path(path):
+        handler = logging.FileHandler(path)
+        handler.setLevel(logging.INFO)
+        logger.addHandler(handler)
+
+    @staticmethod
     def text(message):
         logger.info(message)
 
