@@ -1,4 +1,5 @@
 import logging
+import numpy as np
 import tensorflow as tf
 from abc import ABCMeta, abstractmethod
 from tensorflow.python.training import moving_averages
@@ -233,6 +234,51 @@ class LocalResponseNormalization(Layer):
             if self.save_summaries:
                 self.output_shape = self.output.get_shape().as_list()[1:]
                 tf.summary.histogram("local_response_normalization", self.output)
+        return self.output
+
+
+class MiniBatchDiscrimination(Layer):
+
+    def __init__(self, batch_size, num_kernels=5, kernel_dim=3, name='local_response_normalization',
+                 summaries=True, reuse=None):
+        super(MiniBatchDiscrimination, self).__init__("MiniBatchDiscrimination", name, 'minibatch_discrimination',
+                                                      summaries, reuse)
+        # Define layer properties
+        self.layer_input = None
+        self.input_shape = None
+        self.output_shape = None
+        self.output = None
+        self.layer_size = None
+        self.batch_size = batch_size
+        self.num_kernels = num_kernels
+        self.kernel_dim = kernel_dim
+
+    def build_graph(self, layer_input):
+        self.layer_input = layer_input
+        self.input_shape = self.layer_input.get_shape().as_list()[1:]
+        self.layer_size = self.input_shape
+        with tf.name_scope(self.layer_name):
+            # Linear part
+            weights = tf.get_variable("weights", [np.prod(self.input_shape), self.num_kernels * self.kernel_dim],
+                                      initializer=get_initializer_by_name("xavier"),
+                                      dtype=tf.float32, trainable=True)
+            bias = tf.get_variable("biases", [self.num_kernels * self.kernel_dim], initializer=tf.zeros_initializer(),
+                                   dtype=tf.float32, trainable=True)
+            not_activated = tf.matmul(self.layer_input, weights)
+            not_activated = tf.nn.bias_add(not_activated, bias)
+
+            activation = tf.reshape(not_activated, (-1, self.num_kernels, self.kernel_dim))
+            diffs = tf.expand_dims(activation, 3) - tf.expand_dims(
+                tf.transpose(activation, [1, 2, 0]), 0)
+            eps = tf.expand_dims(np.eye(self.batch_size, dtype=np.float32), 1)
+            abs_diffs = tf.reduce_sum(tf.abs(diffs), 2) + eps
+            minibatch_features = tf.reduce_sum(tf.exp(-abs_diffs), 2)
+            self.output = tf.concat([self.layer_input, minibatch_features], axis=1)
+
+            # Summaries
+            if self.save_summaries:
+                self.output_shape = self.output.get_shape().as_list()[1:]
+                tf.summary.histogram("minibatch_discrimination", self.output)
         return self.output
 
 

@@ -29,7 +29,7 @@ class GANScheme(object):
         self.discriminator_input_size = discriminator_input_size
 
         # Set information about loss used in training
-        self.gan_model_loss = 'casual'
+        self.gan_model_loss = 'js-non-saturation'
         self.gan_model_loss_data = None
 
         # Save information about optimizers
@@ -130,9 +130,27 @@ class GANScheme(object):
         pass
 
     @staticmethod
-    def generator_loss(logits, targets):
+    def generator_js_non_saturation_loss(logits, targets):
         with tf.name_scope("Generator_loss"):
             loss_comp = tf.nn.sigmoid_cross_entropy_with_logits(logits=logits, labels=targets)
+            red_mean = tf.reduce_mean(loss_comp)
+            tf.summary.scalar("Generator_loss", red_mean)
+        return red_mean
+
+    @staticmethod
+    def generator_js_saturation_loss(logits, targets):
+        with tf.name_scope("Generator_loss"):
+            layer_activation = tf.nn.sigmoid(logits)
+            loss_comp = targets * tf.log(1 - layer_activation)
+            red_mean = tf.reduce_mean(loss_comp)
+            tf.summary.scalar("Generator_loss", red_mean)
+        return red_mean
+
+    @staticmethod
+    def generator_kl_loss(logits, targets):
+        with tf.name_scope("Generator_loss"):
+            d_g_z = tf.nn.sigmoid(logits)
+            loss_comp = - targets * tf.log(d_g_z / (1 - d_g_z))
             red_mean = tf.reduce_mean(loss_comp)
             tf.summary.scalar("Generator_loss", red_mean)
         return red_mean
@@ -264,7 +282,7 @@ class GANScheme(object):
         self.gan_model_loss = loss
         self.gan_model_loss_data = kwargs
 
-    def casual_gan_loss(self):
+    def js_non_saturation_gan_loss(self):
         lb_smooth = self.gan_model_loss_data.get("label_smooth", False)
         fake_image = self.discriminator_fake.layer_outputs[-1]
         real_image = self.discriminator.layer_outputs[-1]
@@ -277,7 +295,43 @@ class GANScheme(object):
             legit_dsc_targets = tf.ones_like(real_image)
         fake_dsc_targets = tf.zeros_like(real_image)
         # Create losses for both networks
-        generator_loss = self.generator_loss(fake_image, tf.ones_like(fake_image))
+        generator_loss = self.generator_js_non_saturation_loss(fake_image, tf.ones_like(fake_image))
+        discriminator_loss = self.discriminator_loss(fake_image, fake_dsc_targets,
+                                                     real_image, legit_dsc_targets)
+        return generator_loss, discriminator_loss
+
+    def js_saturation_gan_loss(self):
+        lb_smooth = self.gan_model_loss_data.get("label_smooth", False)
+        fake_image = self.discriminator_fake.layer_outputs[-1]
+        real_image = self.discriminator.layer_outputs[-1]
+
+        # Add label smoothing
+        Messenger.text("Label-Smoothing {}".format(lb_smooth))
+        if lb_smooth:
+            legit_dsc_targets = 0.9 * tf.ones_like(real_image)
+        else:
+            legit_dsc_targets = tf.ones_like(real_image)
+        fake_dsc_targets = tf.zeros_like(real_image)
+        # Create losses for both networks
+        generator_loss = self.generator_js_saturation_loss(fake_image, tf.ones_like(fake_image))
+        discriminator_loss = self.discriminator_loss(fake_image, fake_dsc_targets,
+                                                     real_image, legit_dsc_targets)
+        return generator_loss, discriminator_loss
+
+    def kl_gan_loss(self):
+        lb_smooth = self.gan_model_loss_data.get("label_smooth", False)
+        fake_image = self.discriminator_fake.layer_outputs[-1]
+        real_image = self.discriminator.layer_outputs[-1]
+
+        # Add label smoothing
+        Messenger.text("Label-Smoothing {}".format(lb_smooth))
+        if lb_smooth:
+            legit_dsc_targets = 0.9 * tf.ones_like(real_image)
+        else:
+            legit_dsc_targets = tf.ones_like(real_image)
+        fake_dsc_targets = tf.zeros_like(real_image)
+        # Create losses for both networks
+        generator_loss = self.generator_kl_loss(fake_image, tf.ones_like(fake_image))
         discriminator_loss = self.discriminator_loss(fake_image, fake_dsc_targets,
                                                      real_image, legit_dsc_targets)
         return generator_loss, discriminator_loss
@@ -326,8 +380,12 @@ class GANScheme(object):
         Messenger.text("Loss supervised method turned on: {}".format(loss_supervised))
 
         # GAN model chosen loss
-        if self.gan_model_loss == 'casual':
-            generator_loss, discriminator_loss = self.casual_gan_loss()
+        if self.gan_model_loss == 'js-non-saturation':
+            generator_loss, discriminator_loss = self.js_non_saturation_gan_loss()
+        elif self.gan_model_loss == 'js-saturation':
+            generator_loss, discriminator_loss = self.js_saturation_gan_loss()
+        elif self.gan_model_loss == 'kl-qp-loss':
+            generator_loss, discriminator_loss = self.kl_gan_loss()
         elif self.gan_model_loss == 'feature-matching':
             generator_loss, discriminator_loss = self.feature_matching_gan_loss()
         else:
