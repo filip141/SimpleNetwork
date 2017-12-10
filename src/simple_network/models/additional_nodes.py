@@ -140,8 +140,6 @@ class ResidualNode(object):
                 layer_input += layer_shortcut_input
                 # if last activation layer defined
                 if node.last_activation_block is not None:
-                    layer_input += layer_shortcut_input
-                    node.node_layers_outputs[-1] += layer_shortcut_input
                     layer_input = Layer.build_layer(node.last_activation_block, layer_input,
                                                     "{}_final_act_{}".format(layer_idx, t_idx),
                                                     is_training, enable_log=False)
