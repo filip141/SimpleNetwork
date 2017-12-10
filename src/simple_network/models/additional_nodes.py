@@ -74,7 +74,11 @@ class ResidualNode(object):
         self.residual_layers = []
         self.residual_layers_outputs = []
         self.node_layers_outputs = []
+        self.last_activation_block = None
         self.layer_name = name
+
+    def add_act_layer(self, layer):
+        self.last_activation_block = layer
 
     def add(self, layer):
         self.node_layers.append(layer)
@@ -131,6 +135,15 @@ class ResidualNode(object):
                         if isinstance(n_r_layer, ConvolutionalLayer):
                             logger_string += ", Kernel Size: {}".format(n_r_layer.layer_size)
                         logger.info(logger_string)
+
                 node.node_layers_outputs[-1] += layer_shortcut_input
                 layer_input += layer_shortcut_input
+                # if last activation layer defined
+                if node.last_activation_block is not None:
+                    layer_input += layer_shortcut_input
+                    node.node_layers_outputs[-1] += layer_shortcut_input
+                    layer_input = Layer.build_layer(node.last_activation_block, layer_input,
+                                                    "{}_final_act_{}".format(layer_idx, t_idx),
+                                                    is_training, enable_log=False)
+                    node.node_layers_outputs.append(layer_input)
         return layer_input
