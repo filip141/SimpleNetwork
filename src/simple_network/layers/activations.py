@@ -8,8 +8,6 @@ class ReluLayer(Layer):
         super(ReluLayer, self).__init__("ReluLayer", name, 'relu', summaries, reuse)
         # Define layer properties
         self.layer_input = None
-        self.input_shape = None
-        self.output_shape = None
         self.output = None
         self.layer_size = None
 
@@ -31,8 +29,6 @@ class SwishLayer(Layer):
         super(SwishLayer, self).__init__("SwishLayer", name, 'swish', summaries, reuse)
         # Define layer properties
         self.layer_input = None
-        self.input_shape = None
-        self.output_shape = None
         self.output = None
         self.layer_size = None
 
@@ -53,8 +49,6 @@ class LeakyReluLayer(Layer):
         super(LeakyReluLayer, self).__init__("LeakyReluLayer", name, 'leaky_relu', summaries, reuse)
         # Define layer properties
         self.layer_input = None
-        self.input_shape = None
-        self.output_shape = None
         self.output = None
         self.layer_size = None
         self.alpha = alpha
@@ -76,8 +70,6 @@ class SoftmaxLayer(Layer):
         super(SoftmaxLayer, self).__init__("SoftmaxLayer", name, 'softmax', summaries, reuse)
         # Define layer properties
         self.layer_input = None
-        self.input_shape = None
-        self.output_shape = None
         self.output = None
         self.layer_size = None
 
@@ -98,8 +90,6 @@ class TanhLayer(Layer):
         super(TanhLayer, self).__init__("TanhLayer", name, 'tanh', summaries, reuse)
         # Define layer properties
         self.layer_input = None
-        self.input_shape = None
-        self.output_shape = None
         self.output = None
         self.layer_size = None
 
@@ -120,8 +110,6 @@ class SigmoidLayer(Layer):
         super(SigmoidLayer, self).__init__("SigmoidLayer", name, 'sigmoid', summaries, reuse)
         # Define layer properties
         self.layer_input = None
-        self.input_shape = None
-        self.output_shape = None
         self.output = None
         self.layer_size = None
 
@@ -142,8 +130,6 @@ class LinearLayer(Layer):
         super(LinearLayer, self).__init__("LinearLayer", name, 'linear', summaries, reuse)
         # Define layer properties
         self.layer_input = None
-        self.input_shape = None
-        self.output_shape = None
         self.output = None
         self.layer_size = None
 

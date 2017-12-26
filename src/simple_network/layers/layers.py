@@ -76,6 +76,8 @@ class Layer(object):
     def __init__(self, layer_type, layer_name, default_name, save_summaries, reuse):
         # Define layer properties
         self.layer_type = layer_type
+        self.input_shape = None
+        self.output_shape = None
 
         # Names and summaries
         self.layer_name = layer_name
@@ -89,7 +91,7 @@ class Layer(object):
 
     @staticmethod
     def build_layer(layer, layer_input, layer_idx, is_training, enable_log=True):
-        if isinstance(layer, BatchNormalizationLayer):
+        if isinstance(layer, BNGroup):
             layer.set_training_indicator(is_training)
         elif isinstance(layer, DropoutGroup):
             layer.set_training_indicator(is_training)
@@ -104,6 +106,7 @@ class Layer(object):
 
 
 class DropoutGroup(Layer):
+
     __metaclass__ = ABCMeta
 
     def __init__(self, layer_type, layer_name, default_name, save_summaries, reuse):
@@ -114,14 +117,15 @@ class DropoutGroup(Layer):
     def set_training_indicator(self, is_training):
         self.is_training = is_training
 
+    def build_graph(self, layer_input):
+        pass
+
 
 class DropoutLayer(DropoutGroup):
 
     def __init__(self, percent=0.2, name='dropout', summaries=True, reuse=None):
         super(DropoutLayer, self).__init__("DropoutLayer", name, 'dropout', summaries, reuse)
         self.layer_input = None
-        self.input_shape = None
-        self.output_shape = None
         self.output = None
         self.layer_size = None
         self.percent = percent
@@ -143,8 +147,6 @@ class SpatialDropoutLayer(DropoutGroup):
     def __init__(self, percent=0.2, name='dropout', summaries=True, reuse=None):
         super(SpatialDropoutLayer, self).__init__("SpatialDropoutLayer", name, 'spatial_dropout', summaries, reuse)
         self.layer_input = None
-        self.input_shape = None
-        self.output_shape = None
         self.output = None
         self.layer_size = None
         self.percent = percent
@@ -173,21 +175,31 @@ class SpatialDropoutLayer(DropoutGroup):
         return self.output
 
 
-class BatchNormalizationLayer(Layer):
+class BNGroup(Layer):
+
+    __metaclass__ = ABCMeta
+
+    def __init__(self, layer_type, layer_name, default_name, save_summaries, reuse):
+        super(BNGroup, self).__init__(layer_type, layer_name, default_name, save_summaries, reuse)
+        # Define layer properties
+        self.is_training = None
+
+    def set_training_indicator(self, is_training):
+        self.is_training = is_training
+
+    def build_graph(self, layer_input):
+        pass
+
+
+class BatchNormalizationLayer(BNGroup):
 
     def __init__(self, name='batch_normalization', summaries=True, reuse=None):
         super(BatchNormalizationLayer, self).__init__("BatchNormalizationLayer", name,
                                                       'batch_normalization', summaries, reuse)
         # Define layer properties
         self.layer_input = None
-        self.input_shape = None
-        self.output_shape = None
         self.output = None
         self.layer_size = None
-        self.is_training = None
-
-    def set_training_indicator(self, is_training):
-        self.is_training = is_training
 
     def build_graph(self, layer_input):
         self.layer_input = layer_input
@@ -206,6 +218,60 @@ class BatchNormalizationLayer(Layer):
         return self.output
 
 
+class SingleBatchNormLayer(BNGroup):
+
+    def __init__(self, name='single_batch_norm', summaries=True, reuse=None):
+        super(SingleBatchNormLayer, self).__init__("SingleBatchNormLayer", name,
+                                                   'single_batch_norm', summaries, reuse)
+        # Define layer properties
+        self.layer_input = None
+        self.output = None
+        self.layer_size = None
+
+    def build_graph(self, layer_input):
+        self.layer_input = layer_input
+        self.input_shape = self.layer_input.get_shape().as_list()[1:]
+        self.layer_size = self.input_shape
+        with tf.name_scope(self.layer_name):
+            self.output = tf.contrib.layers.batch_norm(self.layer_input,
+                                                       decay=0.99,
+                                                       updates_collections=None,
+                                                       epsilon=0.001,
+                                                       scale=True,
+                                                       is_training=self.is_training,
+                                                       scope=self.layer_name)
+            self.output_shape = self.output.get_shape().as_list()[1:]
+        return self.output
+
+
+class InstanceNormLayer(BNGroup):
+
+    def __init__(self, name='instance_norm', summaries=True, reuse=None):
+        super(InstanceNormLayer, self).__init__("InstanceNormLayer", name,
+                                                'instance_norm', summaries, reuse)
+        # Define layer properties
+        self.layer_input = None
+        self.output = None
+        self.layer_size = None
+
+    def build_graph(self, layer_input):
+        self.layer_input = layer_input
+        self.input_shape = self.layer_input.get_shape().as_list()[1:]
+        self.layer_size = self.input_shape
+        eps = 0.001
+        with tf.name_scope(self.layer_name):
+            if self.layer_input.get_shape().ndims == 4:
+                mean = tf.reduce_mean(self.layer_input, [0, 1, 2])
+                std = tf.reduce_mean(tf.square(self.layer_input - mean), [0, 1, 2])
+                self.layer_input = (self.layer_input - mean) / tf.sqrt(std + eps)
+            elif self.layer_input.get_shape().ndims == 2:
+                mean = tf.reduce_mean(self.layer_input, 0)
+                std = tf.reduce_mean(tf.square(self.layer_input - mean), 0)
+                self.layer_input = (self.layer_input - mean) / tf.sqrt(std + eps)
+            self.output_shape = self.output.get_shape().as_list()[1:]
+        return self.output
+
+
 class LocalResponseNormalization(Layer):
 
     def __init__(self, depth_radius=2, alpha=2e-05, beta=0.75, bias=1.0, name='local_response_normalization',
@@ -214,8 +280,6 @@ class LocalResponseNormalization(Layer):
                                                          'local_response_normalization', summaries, reuse)
         # Define layer properties
         self.layer_input = None
-        self.input_shape = None
-        self.output_shape = None
         self.output = None
         self.layer_size = None
         self.depth_radius = depth_radius
@@ -245,8 +309,6 @@ class MiniBatchDiscrimination(Layer):
                                                       summaries, reuse)
         # Define layer properties
         self.layer_input = None
-        self.input_shape = None
-        self.output_shape = None
         self.output = None
         self.layer_size = None
         self.batch_size = batch_size

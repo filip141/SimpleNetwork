@@ -8,8 +8,6 @@ class ImageSplitterLayer(Layer):
         super(ImageSplitterLayer, self).__init__("ImageSplitterLayer", name, 'image_splitter', summaries, reuse)
         # Define layer properties
         self.layer_input = None
-        self.input_shape = None
-        self.output_shape = None
         self.output = None
         self.ksize = ksize
         self.layer_size = None
@@ -43,8 +41,6 @@ class SplitterLayer(Layer):
         super(SplitterLayer, self).__init__("SplitterLayer", name, 'splitter', summaries, reuse)
         # Define layer properties
         self.layer_input = None
-        self.input_shape = None
-        self.output_shape = None
         self.output = None
         self.num_split = num_split
         self.layer_size = None

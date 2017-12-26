@@ -17,8 +17,6 @@ class ConvolutionalLayer(Layer):
 
         # Define layer properties
         self.layer_input = None
-        self.input_shape = None
-        self.output_shape = None
         self.layer_size = l_size
 
         # initializer
@@ -132,8 +130,6 @@ class MaxPoolingLayer(Layer):
 
         # Define layer properties
         self.layer_input = None
-        self.input_shape = None
-        self.output_shape = None
         self.layer_size = pool_size
 
         self.stride = stride
@@ -168,8 +164,6 @@ class GlobalAveragePoolingLayer(Layer):
 
         # Define layer properties
         self.layer_input = None
-        self.input_shape = None
-        self.output_shape = None
 
     def build_graph(self, layer_input):
         self.layer_input = layer_input
@@ -190,8 +184,6 @@ class Flatten(Layer):
         # Define layer properties
         self.layer_type = "Flatten"
         self.layer_input = None
-        self.input_shape = None
-        self.output_shape = None
         self.output = None
 
         # Names
