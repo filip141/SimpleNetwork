@@ -369,15 +369,13 @@ class GANScheme(object):
             Messenger.text("No restore points in {}".format(self.log_path))
 
     def train(self, train_iter, generator_steps=1, discriminator_steps=1, train_step=100, epochs=1000,
-              sample_per_epoch=1000, summary_step=5, reshape_input=None, save_model=True, restore_model=True,
-              loss_supervised=False):
+              sample_per_epoch=1000, summary_step=5, reshape_input=None, save_model=True, restore_model=True):
         # Check Build model
         if not self.discriminator.model_build:
             raise AttributeError("Discriminator Model should be build before training it.")
         if not self.generator.model_build:
             raise AttributeError("Generator Model should be build before training it.")
         self.save_model_info()
-        Messenger.text("Loss supervised method turned on: {}".format(loss_supervised))
 
         # GAN model chosen loss
         if self.gan_model_loss == 'js-non-saturation':
@@ -453,41 +451,25 @@ class GANScheme(object):
                 if self.labels == "convo-semi-supervised":
                     dsc_train_data[self.labels_placeholder] = batch_y
 
-                # Train network according to loss or not
-                if not loss_supervised:
-                    update_gen = ""
-                    update_dsc = ""
-                    if sample_iter % discriminator_steps == 0:
-                        update_dsc = "Discriminator"
-                        self.session.run(self.discriminator.optimizer_func, feed_dict=dsc_train_data)
-                    if sample_iter % generator_steps == 0:
-                        update_gen = "Generator"
-                        self.session.run(self.generator.optimizer_func, feed_dict=dsc_train_data)
-                    updated_network = "{} {}".format(update_gen, update_dsc)
+                # Train network
+                update_gen = ""
+                update_dsc = ""
+                if sample_iter % discriminator_steps == 0:
+                    update_dsc = "Discriminator"
+                    self.session.run(self.discriminator.optimizer_func, feed_dict=dsc_train_data)
+                if sample_iter % generator_steps == 0:
+                    update_gen = "Generator"
+                    self.session.run(self.generator.optimizer_func, feed_dict=dsc_train_data)
+                updated_network = "{} {}".format(update_gen, update_dsc)
 
-                    # Calculate loss and moving mean for it
-                    err_generator = self.session.run(generator_loss, feed_dict=dsc_train_data)
-                    err_discriminator = self.session.run(discriminator_loss, feed_dict=dsc_train_data)
-                    gen_moving_avg_train = gen_moving_avg_train[-9:] + [err_generator]
-                    dsc_moving_avg_train = dsc_moving_avg_train[-9:] + [err_discriminator]
-                    dsc_moving_mean = np.mean(dsc_moving_avg_train)
-                    gen_moving_mean = np.mean(gen_moving_avg_train)
-                else:
+                # Calculate loss and moving mean for it
+                err_generator = self.session.run(generator_loss, feed_dict=dsc_train_data)
+                err_discriminator = self.session.run(discriminator_loss, feed_dict=dsc_train_data)
+                gen_moving_avg_train = gen_moving_avg_train[-9:] + [err_generator]
+                dsc_moving_avg_train = dsc_moving_avg_train[-9:] + [err_discriminator]
+                dsc_moving_mean = np.mean(dsc_moving_avg_train)
+                gen_moving_mean = np.mean(gen_moving_avg_train)
 
-                    # Calculate loss and moving mean for it
-                    err_generator = self.session.run(generator_loss, feed_dict=dsc_train_data)
-                    err_discriminator = self.session.run(discriminator_loss, feed_dict=dsc_train_data)
-                    gen_moving_avg_train = gen_moving_avg_train[-9:] + [err_generator]
-                    dsc_moving_avg_train = dsc_moving_avg_train[-9:] + [err_discriminator]
-                    dsc_moving_mean = np.mean(dsc_moving_avg_train)
-                    gen_moving_mean = np.mean(gen_moving_avg_train)
-
-                    if dsc_moving_mean > gen_moving_mean:
-                        updated_network = "Discriminator"
-                        self.session.run(self.discriminator.optimizer_func, feed_dict=dsc_train_data)
-                    else:
-                        updated_network = "Generator"
-                        self.session.run(self.generator.optimizer_func, feed_dict=dsc_train_data)
                 train_info_str = "Discriminator loss: {} | Generator loss: {} | Updated {} | Sample number: {} | " \
                                  "Time: {}"\
                     .format(dsc_moving_mean, gen_moving_mean, updated_network, sample_iter,

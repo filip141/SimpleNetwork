@@ -17,8 +17,6 @@ class FullyConnectedLayer(Layer):
 
         # Define layer properties
         self.layer_input = None
-        self.output_shape = None
-        self.input_shape = None
         self.layer_size = [out_neurons]
 
         # initializer
