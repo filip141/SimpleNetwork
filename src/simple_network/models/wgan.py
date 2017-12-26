@@ -22,27 +22,14 @@ class WasserstainGANScheme(GANScheme):
     def build_discriminator(self, discriminator):
         pass
 
-    @staticmethod
-    def discriminator_loss(logits_1, targets_1, logits_2, targets_2):
-        with tf.name_scope("Discriminator_loss"):
-            loss_1 = tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_1, labels=targets_1)
-            red_mean_1 = tf.reduce_mean(loss_1)
-            loss_2 = tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_2, labels=targets_2)
-            red_mean_2 = tf.reduce_mean(loss_2)
-            red_mean_overall = red_mean_1 + red_mean_2
-            tf.summary.scalar("Discriminator_loss", red_mean_overall)
-            tf.summary.scalar("Discriminator_loss_real", red_mean_2)
-            tf.summary.scalar("Discriminator_loss_fake", red_mean_1)
-        return red_mean_overall
-
     def wasserstain_gan_loss(self):
         fake_image = self.discriminator_fake.layer_outputs[-1]
         real_image = self.discriminator.layer_outputs[-1]
 
         # Create losses for both networks
         generator_loss = tf.reduce_mean(fake_image)
-        discriminator_loss = tf.reduce_mean(real_image) - tf.reduce_mean(fake_image)
-        return generator_loss, discriminator_loss
+        critic_loss = tf.reduce_mean(real_image) - tf.reduce_mean(fake_image)
+        return generator_loss, critic_loss
 
     @staticmethod
     def clip_weights(d_vars):
