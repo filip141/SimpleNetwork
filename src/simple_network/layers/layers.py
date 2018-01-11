@@ -220,13 +220,15 @@ class BatchNormalizationLayer(BNGroup):
 
 class SingleBatchNormLayer(BNGroup):
 
-    def __init__(self, name='single_batch_norm', summaries=True, reuse=None):
+    def __init__(self, scale=True, center=True, name='single_batch_norm', summaries=True, reuse=None):
         super(SingleBatchNormLayer, self).__init__("SingleBatchNormLayer", name,
                                                    'single_batch_norm', summaries, reuse)
         # Define layer properties
         self.layer_input = None
         self.output = None
         self.layer_size = None
+        self.scale = scale
+        self.center = center
 
     def build_graph(self, layer_input):
         self.layer_input = layer_input
@@ -237,7 +239,8 @@ class SingleBatchNormLayer(BNGroup):
                                                        decay=0.99,
                                                        updates_collections=None,
                                                        epsilon=0.001,
-                                                       scale=True,
+                                                       scale=self.scale,
+                                                       center=self.center,
                                                        is_training=self.is_training,
                                                        scope=self.layer_name)
             self.output_shape = self.output.get_shape().as_list()[1:]

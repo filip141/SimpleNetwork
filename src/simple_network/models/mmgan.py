@@ -4,6 +4,7 @@ import tensorflow as tf
 from abc import ABCMeta, abstractmethod
 from simple_network.tools.utils import Messenger
 from simple_network.models.gan_sheme import GANScheme
+from simple_network.models.network_parallel import NetworkParallel
 
 
 class MMGANScheme(GANScheme):
@@ -120,11 +121,69 @@ class MMGANScheme(GANScheme):
                                                      real_image, legit_dsc_targets)
         return generator_loss, discriminator_loss
 
+    def gradient_penalty(self):
+        # define gradient
+        scale = self.gan_model_loss_data.get("scale", 10)
+        epsilon = tf.random_uniform([], 0.0, 1.0)
+        x_hat = epsilon * self.discriminator.input_layer_placeholder + (1 - epsilon) * self.generator.layer_outputs[-1]
+        discriminator_hat = NetworkParallel(self.discriminator_input_size, input_summary=None,
+                                            summary_path=self.discriminator_path,
+                                            input_placeholder=x_hat,
+                                            session=self.session)
+        with tf.variable_scope("discriminator"):
+            self.build_discriminator(discriminator_hat)
+            tf.get_variable_scope().reuse_variables()
+            with tf.name_scope("discriminator_hat"):
+                discriminator_hat.build_model(self.discriminator_learning_rate, out_placeholder=False)
+        d_hat = discriminator_hat.layer_outputs[-1]
+        ddx = tf.gradients(d_hat, x_hat)[0]
+        ddx = tf.sqrt(tf.reduce_sum(tf.square(ddx), axis=1))
+        ddx = tf.reduce_mean(tf.square(ddx - 1.0) * scale)
+
+        # Create losses for both networks
+        generator_loss, discriminator_loss = self.js_non_saturation_gan_loss()
+        discriminator_loss += ddx
+        tf.summary.scalar("Discriminator_grad", ddx)
+        return generator_loss, discriminator_loss
+
+    def dragan_loss(self):
+        # define gradient
+        k = self.gan_model_loss_data.get("k", 1.0)
+        scale = self.gan_model_loss_data.get("scale", 10)
+        stdev = self.gan_model_loss_data.get("stdev", 1.0)
+        epsilon = tf.random_uniform([], 0.0, 1.0)
+        x_p = self.discriminator.input_layer_placeholder + stdev * tf.random_uniform(self.discriminator.input_size,
+                                                                                     0.0, 1.0)
+        x_hat = (1 - epsilon) * self.discriminator.input_layer_placeholder + epsilon * x_p
+        discriminator_hat = NetworkParallel(self.discriminator_input_size, input_summary=None,
+                                            summary_path=self.discriminator_path,
+                                            input_placeholder=x_hat,
+                                            session=self.session)
+        with tf.variable_scope("discriminator"):
+            self.build_discriminator(discriminator_hat)
+            tf.get_variable_scope().reuse_variables()
+            with tf.name_scope("discriminator_hat"):
+                discriminator_hat.build_model(self.discriminator_learning_rate, out_placeholder=False)
+        d_hat = discriminator_hat.layer_outputs[-1]
+        ddx = tf.gradients(d_hat, x_hat)[0]
+        ddx = tf.sqrt(tf.reduce_sum(tf.square(ddx), axis=1))
+        ddx = tf.reduce_mean(tf.square(ddx - k) * scale)
+
+        # Create losses for both networks
+        generator_loss, discriminator_loss = self.js_non_saturation_gan_loss()
+        discriminator_loss += ddx
+        tf.summary.scalar("Discriminator_grad", ddx)
+        return generator_loss, discriminator_loss
+
     def get_gan_loss_func(self):
         if self.gan_model_loss == 'js-non-saturation':
             generator_loss, discriminator_loss = self.js_non_saturation_gan_loss()
         elif self.gan_model_loss == 'js-saturation':
             generator_loss, discriminator_loss = self.js_saturation_gan_loss()
+        elif self.gan_model_loss == 'dragan':
+            generator_loss, discriminator_loss = self.dragan_loss()
+        elif self.gan_model_loss == 'gradient-penalty':
+            generator_loss, discriminator_loss = self.gradient_penalty()
         elif self.gan_model_loss == 'feature-matching':
             generator_loss, discriminator_loss = self.feature_matching_gan_loss()
         else:
@@ -143,6 +202,8 @@ class MMGANScheme(GANScheme):
                           self.discriminator.is_training_placeholder: True,
                           self.generator.is_training_placeholder: True,
                           self.discriminator_fake.is_training_placeholder: True}
+        if self.gan_model_loss in ('dragan', 'gradient-penalty'):
+            dsc_train_data["discriminator_1/discriminator_hat/is_training:0"] = False
         # Add labels for semi-supervised learning
         if self.labels == "convo-semi-supervised":
             dsc_train_data[self.labels_placeholder] = batch_y
@@ -152,10 +213,11 @@ class MMGANScheme(GANScheme):
     def moving_average(moving_avg_list, new_sample):
         moving_avg_list = moving_avg_list[-9:] + [new_sample]
         moving_mean = np.mean(moving_avg_list)
-        return moving_mean
+        return moving_avg_list, moving_mean
 
     def train(self, train_iter, generator_steps=1, discriminator_steps=1, train_step=100, epochs=1000,
-              sample_per_epoch=1000, summary_step=5, reshape_input=None, save_model=True, restore_model=True):
+              sample_per_epoch=1000, summary_step=50, reshape_input=None, save_model=True, restore_model=True,
+              store_method=None):
         # Check Build model
         if not self.discriminator.model_build:
             raise AttributeError("Discriminator Model should be build before training it.")
@@ -230,8 +292,8 @@ class MMGANScheme(GANScheme):
                 # Calculate loss and moving mean for it
                 err_generator = self.session.run(generator_loss, feed_dict=dsc_train_data)
                 err_discriminator = self.session.run(discriminator_loss, feed_dict=dsc_train_data)
-                gen_moving_mean = self.moving_average(gen_moving_avg_train, err_generator)
-                dsc_moving_mean = self.moving_average(dsc_moving_avg_train, err_discriminator)
+                gen_moving_avg_train, gen_moving_mean = self.moving_average(gen_moving_avg_train, err_generator)
+                dsc_moving_avg_train, dsc_moving_mean = self.moving_average(dsc_moving_avg_train, err_discriminator)
 
                 train_info_str = "Discriminator loss: {} | Generator loss: {} | Updated {} | Sample number: {} | " \
                                  "Time: {}"\
@@ -248,6 +310,10 @@ class MMGANScheme(GANScheme):
                         sum_res_discriminator, epoch_idx * sample_per_epoch + sample_iter)
                     self.generator.train_writer.add_summary(
                         sum_res_generator, epoch_idx * sample_per_epoch + sample_iter)
+                    if store_method is not None:
+                        out_data = self.session.run(self.generator.layer_outputs[-1], feed_dict=dsc_train_data)
+                        store_method(out_data, "{}_gen".format(epoch_idx * sample_per_epoch + sample_iter))
+                        store_method(batch_x, "{}_dsc".format(epoch_idx * sample_per_epoch + sample_iter))
             if save_model:
                 self.discriminator.save(global_step=epoch_idx * sample_per_epoch)
                 self.generator.save(global_step=epoch_idx * sample_per_epoch)

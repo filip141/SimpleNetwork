@@ -67,8 +67,8 @@ class GANScheme(object):
             input_gen_placeholder = tf.placeholder(tf.float32, input_gen_size, name='gen_x')
 
             # define placeholder for discriminator
-            dsc_input_size_final = [discriminator_input_size[0], discriminator_input_size[1],
-                                    discriminator_input_size[2] + labels_size]
+            dsc_input_size_final = list(discriminator_input_size)
+            dsc_input_size_final[-1] += labels_size
             input_dsc_size = [None, ] + self.discriminator_input_size
             input_dsc_placeholder = tf.placeholder(tf.float32, input_dsc_size, name="dsc_x")
 
@@ -80,12 +80,11 @@ class GANScheme(object):
             new_gen_placeholder = tf.concat(axis=1, values=[input_gen_placeholder, labels_placeholder])
 
             # Concat labels with discriminator input
-            labels_y1 = tf.reshape(labels_placeholder, shape=[self.batch_size, 1, 1, labels_size])
-            new_dsc_placeholder = tf.concat(axis=3, values=[input_dsc_placeholder,
-                                                            labels_y1*tf.ones(
-                                                                [self.batch_size,
-                                                                 input_dsc_size[1],
-                                                                 input_dsc_size[2], labels_size])])
+            labels_y1_size = [self.batch_size] + [1 for _ in range(len(input_dsc_size) - 2)] + [labels_size]
+            labels_y1 = tf.reshape(labels_placeholder, shape=labels_y1_size)
+            ones_size = [self.batch_size] + list(input_dsc_size)[1:-1] + [labels_size]
+            new_dsc_placeholder = tf.concat(axis=-1, values=[input_dsc_placeholder,
+                                                             labels_y1*tf.ones(ones_size)])
 
             # Save labels and input images placeholder also construct input size vector for encoder
             self.labels_placeholder = labels_placeholder
@@ -174,18 +173,16 @@ class GANScheme(object):
             self.generator.build_model(generator_learning_rate, out_placeholder=False)
 
         # Define fake generator
-        dsc_final_shape = self.discriminator_input_size
+        dsc_final_shape = list(self.discriminator_input_size)
         dsc_fake_input_placeholder = self.generator.layer_outputs[-1]
         if self.labels == "convo-semi-supervised":
-            labels_y1 = tf.reshape(self.labels_placeholder, shape=[-1, 1, 1, self.labels_size])
-            dsc_fake_input_placeholder = tf.concat(axis=3, values=[dsc_fake_input_placeholder,
-                                                                   labels_y1*tf.ones(
-                                                                       [self.batch_size,
-                                                                        self.discriminator_input_size[0],
-                                                                        self.discriminator_input_size[1],
-                                                                        self.labels_size])])
-            dsc_final_shape = [self.discriminator_input_size[0], self.discriminator_input_size[1],
-                               self.discriminator_input_size[2] + self.labels_size]
+            labels_y1_size = [-1] + [1 for _ in range(len(dsc_final_shape) - 1)] + [self.labels_size]
+            labels_y1 = tf.reshape(self.labels_placeholder, shape=labels_y1_size)
+            ones_size = [self.batch_size] + list(dsc_final_shape)[:-1] + [self.labels_size]
+            dsc_fake_input_placeholder = tf.concat(axis=-1, values=[dsc_fake_input_placeholder,
+                                                                    labels_y1*tf.ones(ones_size)])
+            dsc_final_shape = list(self.discriminator_input_size)
+            dsc_final_shape[-1] += self.labels_size
         self.discriminator_fake = NetworkParallel(dsc_final_shape, input_summary=self.input_summary,
                                                   summary_path=self.discriminator_path,
                                                   input_placeholder=dsc_fake_input_placeholder,
@@ -221,12 +218,13 @@ class GANScheme(object):
             return adam_optimizer
         elif optimizer_name == "Momentum":
             return momentum_optimizer
-        elif optimizer_name == "RMSprop":
+        elif optimizer_name == "RMSProp":
             return rmsprop_optimizer
         elif optimizer_name == "SGD":
             return sgd_optimizer
         else:
-            raise AttributeError("Optimizer {} not defined.".format(self.optimizer))
+            raise AttributeError("Optimizer {}, {} not defined.".format(self.generator_optimizer,
+                                                                        self.discriminator_optimizer))
 
     def set_loss(self, loss, **kwargs):
         self.gan_model_loss = loss
@@ -243,5 +241,5 @@ class GANScheme(object):
 
     @abstractmethod
     def train(self, train_iter, generator_steps=1, discriminator_steps=1, train_step=100, epochs=1000,
-              sample_per_epoch=1000, summary_step=5, reshape_input=None, save_model=True, restore_model=True):
+              sample_per_epoch=1000, summary_step=50, reshape_input=None, save_model=True, restore_model=True):
         pass

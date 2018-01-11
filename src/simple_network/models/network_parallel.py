@@ -87,7 +87,7 @@ class NetworkParallel(SNModel):
         self.sess.run(init)
         # Initialize saver for future saving weights
         self.model_build = True
-        self.saver = tf.train.Saver()
+        self.saver = tf.train.Saver(max_to_keep=1)
         self.save_model_info()
 
     def moving_average(self, moving_avg, t_results, phase="Train"):
