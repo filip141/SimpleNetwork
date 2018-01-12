@@ -28,10 +28,14 @@ class WasserstainGANScheme(GANScheme):
         real_image = self.discriminator.layer_outputs[-1]
 
         # define gradient
+        last_dim = self.discriminator_input_size[-1]
         scale = self.gan_model_loss_data.get("scale", 10)
         epsilon = tf.random_uniform([], 0.0, 1.0)
-        x_hat = epsilon * self.discriminator.input_layer_placeholder + (1 - epsilon) * self.generator.layer_outputs[-1]
-        discriminator_hat = NetworkParallel(self.discriminator_input_size, input_summary=None,
+        x_hat = epsilon * self.discriminator.input_layer_placeholder[...,:last_dim] + \
+                (1 - epsilon) * self.generator.layer_outputs[-1]
+
+        x_hat, dsc_final_shape = self.construct_dsc_input(x_hat)
+        discriminator_hat = NetworkParallel(dsc_final_shape, input_summary=None,
                                             summary_path=self.discriminator_path,
                                             input_placeholder=x_hat,
                                             session=self.session)

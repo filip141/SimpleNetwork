@@ -165,6 +165,19 @@ class GANScheme(object):
         model_logger.add_to_json("gan_labels_type", self.labels)
         model_logger.save()
 
+    def construct_dsc_input(self, dsc_input):
+        dsc_final_shape = list(self.discriminator_input_size)
+        if self.labels == "convo-semi-supervised":
+            labels_y1_size = [-1] + [1 for _ in range(len(dsc_final_shape) - 1)] + [self.labels_size]
+            labels_y1 = tf.reshape(self.labels_placeholder, shape=labels_y1_size)
+            ones_size = [self.batch_size] + list(dsc_final_shape)[:-1] + [self.labels_size]
+            x_value = tf.concat(axis=-1, values=[dsc_input, labels_y1*tf.ones(ones_size)])
+            dsc_final_shape = list(self.discriminator_input_size)
+            dsc_final_shape[-1] += self.labels_size
+        else:
+            x_value = dsc_input
+        return x_value, dsc_final_shape
+
     def model_compile(self, discriminator_learning_rate, generator_learning_rate):
         # Build generator layers
         with tf.variable_scope("generator"):
@@ -173,16 +186,7 @@ class GANScheme(object):
             self.generator.build_model(generator_learning_rate, out_placeholder=False)
 
         # Define fake generator
-        dsc_final_shape = list(self.discriminator_input_size)
-        dsc_fake_input_placeholder = self.generator.layer_outputs[-1]
-        if self.labels == "convo-semi-supervised":
-            labels_y1_size = [-1] + [1 for _ in range(len(dsc_final_shape) - 1)] + [self.labels_size]
-            labels_y1 = tf.reshape(self.labels_placeholder, shape=labels_y1_size)
-            ones_size = [self.batch_size] + list(dsc_final_shape)[:-1] + [self.labels_size]
-            dsc_fake_input_placeholder = tf.concat(axis=-1, values=[dsc_fake_input_placeholder,
-                                                                    labels_y1*tf.ones(ones_size)])
-            dsc_final_shape = list(self.discriminator_input_size)
-            dsc_final_shape[-1] += self.labels_size
+        dsc_fake_input_placeholder, dsc_final_shape = self.construct_dsc_input(self.generator.layer_outputs[-1])
         self.discriminator_fake = NetworkParallel(dsc_final_shape, input_summary=self.input_summary,
                                                   summary_path=self.discriminator_path,
                                                   input_placeholder=dsc_fake_input_placeholder,
