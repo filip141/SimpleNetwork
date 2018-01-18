@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name='simple_network',
-    version='0.1',
+    version='0.2',
     packages=['simple_network', 'simple_network.tools', 'simple_network.train', 'simple_network.layers'],
     package_dir={'': 'src'},
     url='',
