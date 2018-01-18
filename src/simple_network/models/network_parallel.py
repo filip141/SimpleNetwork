@@ -176,8 +176,7 @@ class NetworkParallel(SNModel):
 
     def train(self, train_iter, test_iter, train_step=100, test_step=100, epochs=1000, sample_per_epoch=1000,
               summary_step=5, reshape_input=None, embedding_num=None, save_model=True, early_stop=None,
-              early_stop_lower=False, test_update=10, avg_buffor_size=9):
-              early_stop_lower=False, test_update=10, discrete_metric=None, d_metric_steps=5):
+              early_stop_lower=False, test_update=10, avg_buffor_size=9, discrete_metric=None, d_metric_steps=5):
         # Check Build model
         if not self.model_build:
             raise AttributeError("Model should be build before training it.")
