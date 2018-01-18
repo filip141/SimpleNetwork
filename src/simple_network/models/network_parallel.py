@@ -2,6 +2,7 @@ import os
 import time
 import logging
 import numpy as np
+import scipy.stats
 import tensorflow as tf
 from simple_network.layers.layers import Layer
 from simple_network.models.netmodel import SNModel
@@ -23,7 +24,8 @@ class NetworkParallel(SNModel):
         handler.setLevel(logging.INFO)
         logger.addHandler(handler)
 
-    def build_model(self, learning_rate=0.01, decay=None, decay_steps=100000, out_placeholder=True):
+    def build_model(self, learning_rate=0.01, decay=None, decay_steps=100000, decay_type="exponential_decay",
+                    out_placeholder=True, regularization=None, reg_lambda=0.001):
         # Define input
         logger.info("-" * 90)
         with tf.name_scope("input_layer"):
@@ -58,15 +60,21 @@ class NetworkParallel(SNModel):
         # Define loss
         loss_function = self.get_loss_by_name()
         if loss_function is not None:
+            reg_string = ""
             self.loss_func = loss_function(logits=layer_output, labels=y_labels, loss_data=self.loss_data)
-            logger.info("Loss function: {}".format(self.loss))
+            if regularization is not None:
+                reg_string = "Regularization: {}, Lambda: {}".format(regularization, reg_lambda)
+                l_reg = self.get_regularization(regularization, reg_lambda)
+                tf.summary.scalar('regularization', l_reg)
+                self.loss_func += l_reg
+            logger.info("Loss function: {}, {}".format(self.loss, reg_string))
 
         # Define decay
         self.learning_rate = learning_rate
         if decay is not None:
             global_step = tf.Variable(0, trainable=False)
             self.optimizer_data["global_step"] = global_step
-            learning_rate = tf.train.exponential_decay(learning_rate, global_step, decay_steps, decay, staircase=True)
+            learning_rate = self.get_learning_rate_decay(learning_rate, global_step, decay_steps, decay, decay_type)
             tf.summary.scalar('learning_rate', learning_rate)
 
         # Define optimizer
@@ -83,12 +91,39 @@ class NetworkParallel(SNModel):
         logger.info("-" * 90)
 
         # Initialize all variables
-        init = tf.global_variables_initializer()
+        init = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
         self.sess.run(init)
         # Initialize saver for future saving weights
         self.model_build = True
         self.saver = tf.train.Saver(max_to_keep=1)
         self.save_model_info()
+
+    @staticmethod
+    def get_learning_rate_decay(learning_rate, global_step, decay_steps, decay, decay_type):
+        if decay_type == "exponential_decay":
+            learning_rate = tf.train.exponential_decay(learning_rate, global_step, decay_steps, decay,
+                                                       staircase=True)
+        elif decay_type == "natural_exp_decay":
+            learning_rate = tf.train.natural_exp_decay(learning_rate, global_step, decay_steps, decay,
+                                                       staircase=True)
+        elif decay_type == "inverse_time_decay":
+            learning_rate = tf.train.inverse_time_decay(learning_rate, global_step, decay_steps,
+                                                        decay_rate=0.5, staircase=False, name=None)
+        return learning_rate
+
+    @staticmethod
+    def get_regularization(regularization, reg_lambda):
+        if regularization == "L2":
+            lossL2 = tf.add_n([
+                tf.nn.l2_loss(v) for v in tf.trainable_variables() if 'bias' not in v.name
+            ]) * reg_lambda
+            return lossL2
+        elif regularization == "L2-bias":
+            lossL2 = tf.add_n([
+                tf.nn.l2_loss(v) for v in tf.trainable_variables()]) * reg_lambda
+            return lossL2
+        else:
+            raise AttributeError("Regularization {} not defined.".format(regularization))
 
     def moving_average(self, moving_avg, t_results, phase="Train", buffor_len=9):
         moving_avg = [x_it[-buffor_len:] + [train_met] for x_it, train_met in zip(moving_avg, t_results)]
@@ -126,9 +161,23 @@ class NetworkParallel(SNModel):
         self.train_writer.add_summary(sum_res_train, idx)
         self.test_writer.add_summary(sum_res_test, idx)
 
+    def discrete_metric_eval(self, discrete_results, discrete_metric, reshape_input):
+        concat_batch = np.concatenate([x[0] for x in discrete_results], axis=0)
+        concat_labels = np.concatenate([x[1] for x in discrete_results], axis=0)
+        eval_data = self.prepare_batch(concat_batch, concat_labels, reshape_input, False)
+        predictions = self.sess.run(self.last_layer_prediction, feed_dict=eval_data)
+        if discrete_metric == "LCC":
+            return np.nan_to_num(np.corrcoef(predictions.flatten(), concat_labels.flatten())[0, 1])
+        if discrete_metric == "SROCC":
+            print(np.std(predictions.flatten()))
+            print(set(concat_labels.flatten().tolist()))
+            print(set(predictions.flatten().tolist()))
+            return np.nan_to_num(scipy.stats.spearmanr(predictions, concat_labels)[0])
+
     def train(self, train_iter, test_iter, train_step=100, test_step=100, epochs=1000, sample_per_epoch=1000,
               summary_step=5, reshape_input=None, embedding_num=None, save_model=True, early_stop=None,
               early_stop_lower=False, test_update=10, avg_buffor_size=9):
+              early_stop_lower=False, test_update=10, discrete_metric=None, d_metric_steps=5):
         # Check Build model
         if not self.model_build:
             raise AttributeError("Model should be build before training it.")
@@ -148,6 +197,8 @@ class NetworkParallel(SNModel):
                                                                    log_dir=self.summary_path)
 
         test_metrics_result = 0
+        discret_metric_text = ""
+        discrete_metric_buffor = []
         moving_avg_train = [[] for _ in range(len(self.metric_list_func))]
         moving_avg_test = [[] for _ in range(len(self.metric_list_func))]
         for epoch_idx in range(epochs):
@@ -164,6 +215,12 @@ class NetworkParallel(SNModel):
                 # Train
                 self.run_optimize(batch_x, batch_y, reshape_input)
 
+                if discrete_metric is not None:
+                    discrete_metric_buffor = discrete_metric_buffor[-d_metric_steps:] + [(test_batch_x, test_batch_y)]
+                    if sample_iter % d_metric_steps == 0:
+                        metric_result = self.discrete_metric_eval(discrete_metric_buffor, discrete_metric,
+                                                                  reshape_input)
+                        discret_metric_text = "Discrete {}: {} |".format(discrete_metric, metric_result)
                 if self.metric is not None:
                     train_metrics_result = self.run_eval(batch_x, batch_y, reshape_input)
                     moving_avg_train, train_info_str, _ = self.moving_average(moving_avg_train, train_metrics_result,
@@ -191,7 +248,7 @@ class NetworkParallel(SNModel):
                                     return
 
                     # Log progress
-                    logger.info(train_info_str + test_info_str + "Sample number: {} | Time: {}"
+                    logger.info(train_info_str + test_info_str + discret_metric_text + "Sample number: {} | Time: {}"
                                 .format(sample_iter, time.time() - start_time))
 
                 # Save summary
