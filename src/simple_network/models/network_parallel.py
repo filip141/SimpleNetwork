@@ -90,8 +90,8 @@ class NetworkParallel(SNModel):
         self.saver = tf.train.Saver(max_to_keep=1)
         self.save_model_info()
 
-    def moving_average(self, moving_avg, t_results, phase="Train"):
-        moving_avg = [x_it[-9:] + [train_met] for x_it, train_met in zip(moving_avg, t_results)]
+    def moving_average(self, moving_avg, t_results, phase="Train", buffor_len=9):
+        moving_avg = [x_it[-buffor_len:] + [train_met] for x_it, train_met in zip(moving_avg, t_results)]
         moving_avg_mean = [np.mean(x_it_n) for x_it_n in moving_avg]
         train_metric_result_dict = dict(zip(self.metric, moving_avg_mean))
         train_info_str = "{} set metrics: {} | ".format(phase, ", ".join(
@@ -128,7 +128,7 @@ class NetworkParallel(SNModel):
 
     def train(self, train_iter, test_iter, train_step=100, test_step=100, epochs=1000, sample_per_epoch=1000,
               summary_step=5, reshape_input=None, embedding_num=None, save_model=True, early_stop=None,
-              early_stop_lower=False, test_update=10):
+              early_stop_lower=False, test_update=10, avg_buffor_size=9):
         # Check Build model
         if not self.model_build:
             raise AttributeError("Model should be build before training it.")
@@ -167,13 +167,14 @@ class NetworkParallel(SNModel):
                 if self.metric is not None:
                     train_metrics_result = self.run_eval(batch_x, batch_y, reshape_input)
                     moving_avg_train, train_info_str, _ = self.moving_average(moving_avg_train, train_metrics_result,
-                                                                              "Train")
+                                                                              "Train", buffor_len=avg_buffor_size)
 
                     # Update test statistics every n iterations
                     if sample_iter % test_update == 0:
                         test_metrics_result = self.run_eval(test_batch_x, test_batch_y, reshape_input, is_train=False)
                     moving_avg_test, test_info_str, moving_avg_m = self.moving_average(moving_avg_test,
-                                                                                       test_metrics_result, "Test")
+                                                                                       test_metrics_result, "Test",
+                                                                                       buffor_len=avg_buffor_size)
                     # Define early stopping
                     if early_stop:
                         for metric_name, metric_score in zip(self.metric, moving_avg_m):
