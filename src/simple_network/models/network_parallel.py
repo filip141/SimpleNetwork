@@ -169,9 +169,6 @@ class NetworkParallel(SNModel):
         if discrete_metric == "LCC":
             return np.nan_to_num(np.corrcoef(predictions.flatten(), concat_labels.flatten())[0, 1])
         if discrete_metric == "SROCC":
-            print(np.std(predictions.flatten()))
-            print(set(concat_labels.flatten().tolist()))
-            print(set(predictions.flatten().tolist()))
             return np.nan_to_num(scipy.stats.spearmanr(predictions, concat_labels)[0])
 
     def train(self, train_iter, test_iter, train_step=100, test_step=100, epochs=1000, sample_per_epoch=1000,
