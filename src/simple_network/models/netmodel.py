@@ -1,5 +1,6 @@
 import os
 import time
+import shutil
 import logging
 import tempfile
 import tensorflow as tf
@@ -22,8 +23,10 @@ logger = logging.getLogger(__name__)
 class SNModel(object):
 
     def __init__(self, input_size, summary_path=None, metric=None, input_summary=None, input_placeholder=None,
-                 session=None):
+                 session=None, clear_temp=False):
         # If summary_path is None set tempdir
+        if clear_temp:
+            shutil.rmtree(summary_path)
         if summary_path is None:
             self.summary_path = tempfile.gettempdir()
         if not os.path.isdir(summary_path):

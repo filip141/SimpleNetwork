@@ -4,9 +4,13 @@ import cv2
 import json
 import random
 import logging
+import datetime
 import tensorflow as tf
 import numpy as np
+
+import matplotlib
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 
 
 logging.basicConfig(level=logging.INFO)
@@ -155,3 +159,27 @@ class ModelLogger(object):
         with open(self.file_path_json, 'w') as outfile:
             json.dump(self.json_dict, outfile)
         self.readable_file.close()
+
+
+class PDFDoc(object):
+
+    def __init__(self, path, title="PDF", author="unknown", subject="", keywors=""):
+        self.pdf = PdfPages(path)
+        d = self.pdf.infodict()
+        d['Title'] = title
+        d['Author'] = author
+        d['Subject'] = subject
+        d['Keywords'] = keywors
+        d['CreationDate'] = datetime.datetime.today()
+        d['ModDate'] = datetime.datetime.today()
+
+    def add_graph(self, x, y, figsize, title, tag):
+        plt.rc('text', usetex=False)
+        plt.figure(figsize=figsize)
+        plt.plot(x, y, tag)
+        plt.title(title)
+        self.pdf.savefig()
+        plt.close()
+
+    def close(self):
+        self.pdf.close()

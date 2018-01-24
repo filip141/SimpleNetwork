@@ -4,6 +4,8 @@ import logging
 import numpy as np
 import scipy.stats
 import tensorflow as tf
+
+from simple_network.tools.utils import PDFDoc
 from simple_network.layers.layers import Layer
 from simple_network.models.netmodel import SNModel
 from simple_network.models.additional_nodes import NetworkNode, ResidualNode
@@ -15,11 +17,14 @@ logger = logging.getLogger(__name__)
 class NetworkParallel(SNModel):
 
     def __init__(self, input_size, summary_path=None, metric=None, input_summary=None, input_placeholder=None,
-                 session=None):
+                 session=None, log_details=None, clear_temp=False):
         # If summary_path is None set tempdir
         self.model_build = False
         super(NetworkParallel, self).__init__(input_size, summary_path, metric, input_summary,
-                                              input_placeholder, session)
+                                              input_placeholder, session, clear_temp)
+        if log_details is None:
+            log_details = {}
+        self.log_details = log_details
         handler = logging.FileHandler(os.path.join(self.summary_path, "log.log"))
         handler.setLevel(logging.INFO)
         logger.addHandler(handler)
@@ -153,7 +158,21 @@ class NetworkParallel(SNModel):
         eval_metrics_result = self.sess.run(self.metric_list_func, feed_dict=eval_data)
         return eval_metrics_result
 
-    def summary_save(self, tr_bx, tr_by, ts_bx, ts_by, reshape_input, merged_sum, idx):
+    def prepare_log_pdf(self, idx):
+        author = self.log_details.get("author", "unknown")
+        subject = self.log_details.get("subject", "")
+        keywors = self.log_details.get("keywors", "")
+        pdf = PDFDoc(path=os.path.join(self.model_info_path, "experiment_details_{}.pdf".format(idx)),
+                     author=author, subject=subject, keywors=keywors)
+        return pdf
+
+    def summary_save(self, tr_bx, tr_by, ts_bx, ts_by, reshape_input, merged_sum, dis_metric_val,
+                     discrete_metric, idx):
+        if dis_metric_val:
+            pdf = self.prepare_log_pdf(idx)
+            x_line = np.linspace(0, idx, len(dis_metric_val))
+            pdf.add_graph(x_line, dis_metric_val, (8, 6), discrete_metric, tag='r')
+            pdf.close()
         train_data = self.prepare_batch(tr_bx, tr_by, reshape_input, True)
         test_data = self.prepare_batch(ts_bx, ts_by, reshape_input, False)
         sum_res_train = self.sess.run(merged_sum, train_data)
@@ -174,6 +193,7 @@ class NetworkParallel(SNModel):
     def train(self, train_iter, test_iter, train_step=100, test_step=100, epochs=1000, sample_per_epoch=1000,
               summary_step=5, reshape_input=None, embedding_num=None, save_model=True, early_stop=None,
               early_stop_lower=False, test_update=10, avg_buffor_size=9, discrete_metric=None, d_metric_steps=5):
+        max_buff = 10000
         # Check Build model
         if not self.model_build:
             raise AttributeError("Model should be build before training it.")
@@ -195,6 +215,7 @@ class NetworkParallel(SNModel):
         test_metrics_result = 0
         discret_metric_text = ""
         discrete_metric_buffor = []
+        discrete_metric_values = []
         moving_avg_train = [[] for _ in range(len(self.metric_list_func))]
         moving_avg_test = [[] for _ in range(len(self.metric_list_func))]
         for epoch_idx in range(epochs):
@@ -216,6 +237,7 @@ class NetworkParallel(SNModel):
                     if sample_iter % d_metric_steps == 0:
                         metric_result = self.discrete_metric_eval(discrete_metric_buffor, discrete_metric,
                                                                   reshape_input)
+                        discrete_metric_values = discrete_metric_values[-max_buff:] + [metric_result]
                         discret_metric_text = "Discrete {}: {} |".format(discrete_metric, metric_result)
                 if self.metric is not None:
                     train_metrics_result = self.run_eval(batch_x, batch_y, reshape_input)
@@ -250,7 +272,8 @@ class NetworkParallel(SNModel):
                 # Save summary
                 if sample_iter % summary_step == 0:
                     self.summary_save(batch_x, batch_y, test_batch_x, test_batch_y, reshape_input,
-                                      merged_summary, epoch_idx * sample_per_epoch + sample_iter)
+                                      merged_summary, discrete_metric_values, discrete_metric,
+                                      epoch_idx * sample_per_epoch + sample_iter)
                 # Add embeddings
                 if (epoch_idx * sample_per_epoch + sample_iter) % 10 == 0:
                     if self.embedding_handler is not None:
