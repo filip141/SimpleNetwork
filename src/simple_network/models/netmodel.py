@@ -26,7 +26,8 @@ class SNModel(object):
                  session=None, clear_temp=False):
         # If summary_path is None set tempdir
         if clear_temp:
-            shutil.rmtree(summary_path)
+            if os.path.isdir(summary_path):
+                shutil.rmtree(summary_path)
         if summary_path is None:
             self.summary_path = tempfile.gettempdir()
         if not os.path.isdir(summary_path):
